@@ -201,6 +201,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
  <a data-v="setup" data-tab="rooms"><span class="ic">🚪</span>Rooms</a>
  <a data-v="setup" data-tab="periods"><span class="ic">⏱️</span>Periods &amp; Breaks</a>
  <a data-v="setup" data-tab="alloc"><span class="ic">🧩</span>Allocation</a>
+ <a data-v="setup" data-tab="fixed"><span class="ic">⭐</span>Devotion / Fixed</a>
  <div class="sec">Tools</div>
  <a data-v="generate"><span class="ic">⚡</span>Auto Generate</a>
  <a data-v="master"><span class="ic">🗓️</span>Master Routine</a>
@@ -253,7 +254,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
    <span class="muted">View:</span>
    <div class="seg" id="ttView"></div>
    <span class="sp"></span>
-   <div class="legend"><span><i style="background:#22c55e"></i>Lecture</span><span><i style="background:#3b82f6"></i>Lab</span><span><i style="background:#a855f7"></i>Activity</span><span><i style="background:#94a3b8"></i>Break</span><span><i style="background:#f97316"></i>Substitution</span></div>
+   <div class="legend"><span><i style="background:#22c55e"></i>Lecture</span><span><i style="background:#3b82f6"></i>Lab</span><span><i style="background:#a855f7"></i>Activity</span><span><i style="background:#ca8a04"></i>Devotion / Fixed</span><span><i style="background:#94a3b8"></i>Break</span><span><i style="background:#f97316"></i>Substitution</span></div>
   </div>
   <div id="swapBar" class="note" style="display:none;align-items:center;gap:10px"><span id="swapTxt" style="flex:1"></span><button class="btn sm sec" onclick="cancelSwap()">Cancel</button></div>
   <p class="muted" id="ttHint" style="margin:0 0 8px;font-size:12px"></p>
@@ -422,6 +423,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
   <li><b>Setup → Allocation</b>: for every class, which teacher teaches which subject and how many periods a week. The total should not exceed the class's weekly periods.</li>
   <li>Teachers who are not available in some periods: <b>Setup → Teachers → ⛔ Slots</b>.</li>
   <li><b>Auto Generate</b> builds the routine with no teacher clash. Then adjust by hand in <b>Class Time Table</b>: tap a period to change it or ⇄ swap two periods. Hand changes are locked 🔒, so you can run Auto Generate again and it fills the rest around them.</li>
+  <li><b>Devotion / Fixed periods</b>: Setup → ⭐ Devotion / Fixed → “Add Devotion (Monday, Period 1)”. Choose days, period, shift, classes and who takes it (no teacher, class teacher, or a teacher). Auto Generate never fills it.</li>
   <li><b>Summer / Winter timing</b>: Periods &amp; Breaks → choose Summer or Winter and set its times (⏱️ Auto timing works for each). Tick “Switch automatically by date” and set the winter dates – the app changes timing by itself.</li>
   <li><b>Timetable</b> screen: switch Class / Teacher / Room and Week / Day; use Today ‹ › to see substitutions of any date in orange. Publish when ready.</li>
   <li><b>Drag &amp; drop</b>: in Timetable (Class) or Master Routine, drag a period onto another to swap (phone: press and hold, then drag). Green cells are safe; red would make a clash.</li>
@@ -491,14 +493,16 @@ function sampleState(){
       S.alloc.push({id:uid(),classId:c.id,subject:code,teacherId:T.id,ppw,room:code==='COM'?'rCL':''});
     });
   }
-  const mPlan=[['ENG*',6],['EVS*',5],['MAT',6],['MIZ',4],['HIN',3],['DRW',2],['MOR',2],['GK',1],['GAM',1]];
-  const jPlan=[['ENG*',6],['MOR*',1],['MAT',6],['SCI',6],['SST',6],['MIZ',4],['HIN',3],['COM',2],['GAM',1]];
-  const arts=[['ENG*',6],['MIZ',6],['HIS',6],['POL',6],['EDU',6],['ECO',5]];
-  const sci=[['ENG*',6],['PHY',7],['CHE',7],['BIO',7],['MAT',8]];
+  const mPlan=[['ENG*',6],['EVS*',5],['MAT',6],['MIZ',4],['HIN',3],['DRW',2],['MOR',2],['GAM',1]];
+  const jPlan=[['ENG*',6],['MAT',6],['SCI',6],['SST',6],['MIZ',4],['HIN',3],['COM',2],['GAM',1]];
+  const arts=[['ENG*',6],['MIZ',6],['HIS',6],['POL',6],['EDU',5],['ECO',5]];
+  const sci=[['ENG*',6],['PHY',7],['CHE',7],['BIO',7],['MAT',7]];
   ['Nursery','KG','I','II','III','IV','V'].forEach(k=>['A','B'].forEach(s=>addClass(k+'-'+s,'M',mPlan,18)));
-  const com=[['ENG*',6],['ACC',7],['BST',7],['ECO',7],['MAT',8]];
+  const com=[['ENG*',6],['ACC',7],['BST',7],['ECO',7],['MAT',7]];
   ['VI','VII','VIII','IX','X'].forEach(k=>['A','B','C'].forEach(s=>addClass(k+'-'+s,'N',jPlan,24)));
   ['XI','XII'].forEach(k=>{addClass(k+'-A','N',sci,24);addClass(k+'-B','N',arts,24);addClass(k+'-C','N',com,24);});
+  S.fixed=[{id:'fx1',label:'Devotion',days:[0],period:0,shift:'all',classIds:'all',by:'none'}];
+  applyFixed(S);
   return S;
 }
 
@@ -513,7 +517,7 @@ function nPer(S,shift){return (S.shifts[shift]||{periods:[]}).periods.length;}
 function busyIndex(S){
   const A=allocMap(S),C=classMap(S),idx={};
   for(const cid in S.tt){const c=C[cid];if(!c)continue;
-    for(const k in S.tt[cid]){const cell=S.tt[cid][k];const a=A[cell.a];if(!a)continue;
+    for(const k in S.tt[cid]){const cell=S.tt[cid][k];const a=A[cell.a];if(!a||!a.teacherId)continue;
       const key=a.teacherId+'|'+c.shift+'|'+k;(idx[key]=idx[key]||[]).push(cid);}}
   return idx;
 }
@@ -547,7 +551,7 @@ function generate(S,opt){
     const tt={};
     for(const cid in S.tt){if(!C[cid])continue;tt[cid]={};
       for(const k in S.tt[cid]){const cell=S.tt[cid][k];if(!A[cell.a])continue;
-        if(!target.has(cid)||cell.l)tt[cid][k]={a:cell.a,l:cell.l?1:0};}}
+        if(!target.has(cid)||cell.l||cell.fx)tt[cid][k]=cell.fx?{a:cell.a,l:1,fx:1}:{a:cell.a,l:cell.l?1:0};}}
     S.classes.forEach(c=>{tt[c.id]=tt[c.id]||{};});
     const busy={},tDay={},sDay={},aCnt={},rB={};
     const bk=(tid,sh,d,p)=>tid+'|'+sh+'|'+d+'|'+p;
@@ -591,7 +595,7 @@ function generate(S,opt){
       });
     }
     const units=[];
-    S.alloc.forEach(a=>{if(!target.has(a.classId)||!C[a.classId]||!T[a.teacherId])return;
+    S.alloc.forEach(a=>{if(a.fixed||!target.has(a.classId)||!C[a.classId]||!T[a.teacherId])return;
       const need=(+a.ppw||0)-(aCnt[a.id]||0);
       const w=(tLoad[a.teacherId]||0)+a.ppw*1.5+(unavC[a.teacherId]?unavC[a.teacherId].size:0)+R()*4;
       for(let i=0;i<need;i++)units.push({aid:a.id,w});});
@@ -606,7 +610,7 @@ function generate(S,opt){
         if(bestS){put(cid,bestS[0],bestS[1],u.aid);placed=true;break;}
         // swap repair: free a slot where our teacher is free by moving the class's lesson elsewhere
         const cands=[];
-        for(const d of days)for(let p=0;p<np;p++){const cell=tt[cid][SK(d,p)];if(cell&&!cell.l&&!cell.ct)cands.push([d,p]);}
+        for(const d of days)for(let p=0;p<np;p++){const cell=tt[cid][SK(d,p)];if(cell&&!cell.l&&!cell.ct&&!cell.fx)cands.push([d,p]);}
         for(let i=cands.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[cands[i],cands[j]]=[cands[j],cands[i]];}
         for(const [d,p] of cands){
           const other=take(cid,d,p);
@@ -645,12 +649,39 @@ function generate(S,opt){
   return {tt:best.tt,unplaced:summary,unplacedTotal:best.unplaced.length,attempt:best.attempt};
 }
 
+/* fixed periods (devotion etc.) */
+function applyFixed(S){
+  S.fixed=S.fixed||[];let displaced=0;const keep=new Set(),codes=new Set();
+  S.fixed.forEach((r,ri)=>{
+    if(!r.code){let c='DEV',i=2;while(S.subjects.some(s=>s.code===c&&!s.fixed))c='DEV'+(i++);r.code=c;}
+    codes.add(r.code);
+    let sb=S.subjects.find(s=>s.code===r.code);if(!sb){sb={code:r.code,name:r.label||'Devotion',color:'#ca8a04',type:'activity',fixed:1};S.subjects.push(sb);}
+    sb.name=r.label||'Devotion';sb.fixed=1;sb.type='activity';
+    S.classes.filter(c=>(r.shift==='all'||c.shift===r.shift)&&(r.classIds==='all'||(r.classIds||[]).includes(c.id))).forEach(c=>{
+      const np=(S.shifts[c.shift]||{periods:[]}).periods.length;
+      const slots=(r.days||[]).filter(d=>S.days.includes(d)&&r.period<np).map(d=>d+'|'+r.period);
+      const tid=r.by==='none'?'':r.by==='ct'?(c.ct||''):r.by;
+      let a=S.alloc.find(x=>x.fixed===r.id&&x.classId===c.id);
+      if(!a){a={id:uid(),classId:c.id,subject:r.code,teacherId:tid,ppw:0,fixed:r.id};S.alloc.push(a);}
+      a.subject=r.code;a.teacherId=tid;a.ppw=slots.length;keep.add(a.id);
+      const tt=S.tt[c.id]=S.tt[c.id]||{};
+      for(const k in tt)if(tt[k].a===a.id&&!slots.includes(k))delete tt[k];
+      slots.forEach(k=>{if(tt[k]&&tt[k].a!==a.id)displaced++;tt[k]={a:a.id,l:1,fx:1};});
+    });
+  });
+  S.alloc.filter(a=>a.fixed&&!keep.has(a.id)).forEach(a=>{const tt=S.tt[a.classId]||{};for(const k in tt)if(tt[k].a===a.id)delete tt[k];});
+  S.alloc=S.alloc.filter(a=>!a.fixed||keep.has(a.id));
+  S.subjects=S.subjects.filter(s=>!s.fixed||codes.has(s.code));
+  const over=S.classes.filter(c=>S.alloc.filter(a=>a.classId===c.id).reduce((x,a)=>x+(+a.ppw||0),0)>S.days.length*((S.shifts[c.shift]||{periods:[]}).periods.length));
+  return {displaced,over};
+}
+
 /* free teachers for a shift/day/period */
 function freeTeachers(S,shift,d,p,exclude){
   const idx=busyIndex(S);exclude=exclude||new Set();
   return S.teachers.filter(t=>!exclude.has(t.id)&&!idx[t.id+'|'+shift+'|'+d+'|'+p]&&!(t.unavail||[]).includes(shift+'|'+d+'|'+p));
 }
-if(typeof module!=='undefined')module.exports={roomClashes,roomIndex,roomOf,roomName,sampleState,generate,clashes,placedCount,freeTeachers,busyIndex,teacherPlaced};
+if(typeof module!=='undefined')module.exports={applyFixed,roomClashes,roomIndex,roomOf,roomName,sampleState,generate,clashes,placedCount,freeTeachers,busyIndex,teacherPlaced};
 
 </script>
 <script>
@@ -666,6 +697,7 @@ function fix(){S.adjust=S.adjust||{};S.rooms=S.rooms||[];S.theme=S.theme||'green
   S.teachers.forEach(t=>{t.unavail=t.unavail||[];});
   for(const k in S.shifts){const s=S.shifts[k];if(!s.breaks){s.breaks=s.breakAfter?[{after:+s.breakAfter,label:s.breakLabel||'Break'}]:[];delete s.breakAfter;delete s.breakLabel;delete s.breakTime;}}
   if(S.settings.autoAdj===undefined)S.settings.autoAdj=true;
+  S.fixed=S.fixed||[];
   if(!S.season)S.season={cur:'summer',auto:false,wFrom:'2026-11-01',wTo:'2027-02-28'};
   for(const k in S.shifts){const s=S.shifts[k];if(!s.times)s.times={summer:JSON.parse(JSON.stringify(s.periods)),winter:JSON.parse(JSON.stringify(s.periods))};}}
 let UNDO=[],LASTJ=null;
@@ -680,7 +712,7 @@ const seasonTag=()=>S.season?SEASONS[S.season.cur]:'';
 function overlapWarn(){const sh=shifts();if(sh.length<2)return '';const a=S.shifts[sh[0]],b=S.shifts[sh[1]];if(!a.periods.length||!b.periods.length)return '';
   const aEnd=a.periods[a.periods.length-1][1],bStart=b.periods[0][0],bEnd=b.periods[b.periods.length-1][1],aStart=a.periods[0][0];
   if(aEnd>bStart&&bEnd>aStart)return `<div class="note err">⚠️ ${esc(a.name)} ends at ${t12(aEnd)} but ${esc(b.name)} starts at ${t12(bStart)}. Teachers who teach in both shifts may get two classes at the same time. Make the morning shift end before the noon shift starts.</div>`;return '';}
-function save(){syncSeason();const now=JSON.stringify(S);if(LASTJ&&now!==LASTJ){UNDO.push(LASTJ);if(UNDO.length>40)UNDO.shift();}LASTJ=now;try{localStorage.setItem(LS,now);}catch(e){}updUndo();}
+function save(){syncSeason();try{applyFixed(S);}catch(e){}const now=JSON.stringify(S);if(LASTJ&&now!==LASTJ){UNDO.push(LASTJ);if(UNDO.length>40)UNDO.shift();}LASTJ=now;try{localStorage.setItem(LS,now);}catch(e){}updUndo();}
 function updUndo(){const b=$('undoTop');if(b){b.style.display=isAdmin?'inline-block':'none';b.disabled=!UNDO.length;b.style.opacity=UNDO.length?1:.45;}}
 function undoLast(){if(!needAdmin())return;if(!UNDO.length){toast('Nothing to undo');return;}const j=UNDO.pop();S=JSON.parse(j);fix();LASTJ=JSON.stringify(S);try{localStorage.setItem(LS,LASTJ);}catch(e){}refreshHeader();render(curView);updUndo();toast('↶ Undone ('+UNDO.length+' more step'+(UNDO.length===1?'':'s')+' available)');}
 function resetShift(sh){if(!needAdmin())return;const def=sampleState().shifts[sh];if(!def){toast('No default for this shift');return;}
@@ -734,7 +766,7 @@ function cellHtml(a,teacherSide,extra,clash){
   if(!a)return `<div class="cell empty">—</div>`;
   const s=subj(a.subject),t=T()[a.teacherId];
   const top=teacherSide?esc(C()[a.classId]?.name||''):esc(s.code);
-  const bot=teacherSide?esc(s.code):esc(t?t.abbr:'?');
+  const bot=teacherSide?esc(s.code):esc(t?t.abbr:(a.fixed?'⭐':'?'));
   return `<div class="cell${clash?' clash':''}" style="background:${tint(s.color,.16)};border-left:4px solid ${s.color}" title="${esc(s.name)} – ${esc(t?t.name:'')}"><div class="s">${top}${extra||''}</div><div class="t">${bot}</div></div>`;
 }
 function classGridOld(cid,forPrint){
@@ -821,7 +853,8 @@ function editCell(cid,d,p){
   if(!isAdmin){if(curView==='timetable')toast('🔒 Turn on Admin to edit');return;}
   if(SWAP){const src=SWAP;SWAP=null;$('swapBar').style.display='none';if(src.cid!==cid){toast('Swap works inside one class');return;}if(src.d===d&&src.p===p)return;doSwap(cid,src.d,src.p,d,p);return;}
   const c=C()[cid],AM=A(),TM=T(),idx=busyIndex(S),pc=placedCount(S);const cur=(S.tt[cid]||{})[SK(d,p)];
-  const al=S.alloc.filter(a=>a.classId===cid);
+  if(cur&&cur.fx){modal(`<h3>⭐ ${esc(subj((A()[cur.a]||{}).subject).name)}</h3><p>${esc(c.name)} · ${DAY_NAMES[d]} · Period ${p+1}</p><p class="muted">This is a fixed period. Change or remove it in Setup → Devotion / Fixed.</p><div class="row"><button class="btn" onclick="closeModal();setupTab='fixed';go('setup')">Open Devotion / Fixed</button><button class="btn sec" onclick="closeModal()">Close</button></div>`);return;}
+  const al=S.alloc.filter(a=>a.classId===cid&&!a.fixed);
   let h=`<h3>${esc(c.name)} · ${DAY_NAMES[d]} · Period ${p+1} <span class="muted" style="font-size:12px">${ptime(c.shift,p)}</span></h3>`;
   al.forEach(a=>{const s=subj(a.subject),t=TM[a.teacherId];const bz=(idx[a.teacherId+'|'+c.shift+'|'+d+'|'+p]||[]).filter(x=>x!==cid);
     const un=t&&(t.unavail||[]).includes(c.shift+'|'+d+'|'+p);const left=a.ppw-(pc[a.id]||0);
@@ -846,6 +879,7 @@ function startSwap(cid,d,p){SWAP={cid,d,p};closeModal();$('swapBar').style.displ
 function cancelSwap(){SWAP=null;$('swapBar').style.display='none';}
 function doSwap(cid,d1,p1,d2,p2){
   const tt=S.tt[cid]=S.tt[cid]||{},a=tt[SK(d1,p1)],b=tt[SK(d2,p2)];
+  if((a&&a.fx)||(b&&b.fx)){toast('⭐ Fixed periods (Devotion) cannot be moved');render(curView);return;}
   const before=clashes(S).length+roomClashes(S).length;
   if(b)tt[SK(d1,p1)]={a:b.a,l:1};else delete tt[SK(d1,p1)];
   if(a)tt[SK(d2,p2)]={a:a.a,l:1};else delete tt[SK(d2,p2)];
@@ -936,7 +970,7 @@ function renderWorkload(){if(!$('wDate').value)$('wDate').value=todayStr();const
 
 /* ---- unified timetable view ---- */
 const TV={mode:'class',id:'',view:'',week:'',day:0};
-const TYPEC={lecture:'#22c55e',lab:'#3b82f6',activity:'#a855f7'};
+const TYPEC={lecture:'#22c55e',lab:'#3b82f6',activity:'#a855f7',fixed:'#ca8a04'};
 function applyTheme(){document.body.dataset.theme=S.theme||'green';const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.body).getPropertyValue('--navy').trim()||'#15803d';}
 const mondayOf=ds=>weekDates(ds)[0];
 const fmtShort=ds=>{const d=new Date(ds+'T00:00:00');return d.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];};
@@ -947,7 +981,7 @@ function publishTT(){if(!needAdmin())return;const st=clashes(S).length+roomClash
   const doIt=()=>{S.pub={at:new Date().toISOString(),hash:ttHash()};save();renderTT();toast('✅ Timetable published');};
   if(st)ask(`There are ${st} clash(es). Publish anyway?`,doIt);else doIt();}
 function shortRoom(cid,a){const r=roomOf(S,cid,a);return String(r).startsWith('cls:')?'Room '+(C()[cid]||{}).name:roomName(S,r);}
-function typeOf(a){if(a.room)return 'lab';return subj(a.subject).type==='activity'?'activity':'lecture';}
+function typeOf(a){if(a.fixed)return 'fixed';if(a.room)return 'lab';return subj(a.subject).type==='activity'?'activity':'lecture';}
 function tc(o){const bg=o.subst?'#fff1e6':tint(o.color||'#888888',.14),bl=o.subst?'#f97316':TYPEC[o.type]||'#22c55e';
   return `<div class="tc${o.clash?' clash':''}${o.abs?' abs':''}" style="background:${bg};border-left-color:${bl}">${o.subst?'<span class="swi">⇄</span>':''}<div class="tn">${esc(o.title)}${o.lock?' <span class="lock">🔒</span>':''}</div>${o.subst?'<div class="ts">(Substitute)</div>':''}<div class="tl">${esc(o.l1||'')}</div><div class="tl m">${esc(o.l2||'')}</div></div>`;}
 function ttItems(mode,id,sh,d,p,idx,ri){const AM=A();
@@ -975,7 +1009,7 @@ function ttTable(mode,id,print){
           const absent=adj&&adj.absent.includes(it.a.teacherId);const subT=absent?TM[(adj.subs||{})[it.cid+'|'+p]]:null;
           if(mode==='teacher')inner+=tc({title:sb.name,l1:(CM[it.cid]||{}).name,l2:absent?('Absent'+(subT?' · covered by '+subT.name:'')):shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,abs:absent,lock:it.l&&!print});
           else if(absent)inner+=tc({title:sb.name,subst:1,l1:subT?subT.name:'No substitute yet',l2:mode==='room'?(CM[it.cid]||{}).name:shortRoom(it.cid,it.a),color:sb.color});
-          else inner+=tc({title:sb.name,l1:mode==='room'?(CM[it.cid]||{}).name+' · '+(t.name||''):(t.name||''),l2:mode==='room'?'':shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,lock:it.l&&!print});});
+          else inner+=tc({title:(it.a.fixed?'⭐ ':'')+sb.name,l1:mode==='room'?(CM[it.cid]||{}).name+' · '+(t.name||''):(t.name||(it.a.fixed?'Whole school':'')),l2:mode==='room'?'':shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,lock:it.l&&!print});});
         if(mode==='teacher'&&adj){Object.entries(adj.subs||{}).forEach(([k,v])=>{if(v!==id)return;const [cid,pp]=k.split('|');if(+pp!==p||!CM[cid]||CM[cid].shift!==sh)return;const cell=(S.tt[cid]||{})[SK(d,p)];const a=cell&&AM[cell.a];if(!a)return;
           inner+=tc({title:subj(a.subject).name,subst:1,l1:CM[cid].name+' (for '+((TM[a.teacherId]||{}).abbr||'')+')',l2:shortRoom(cid,a),color:subj(a.subject).color});});}
         if(!inner)inner=mode==='teacher'?'<div class="tc free">Free</div>':'<div class="tc empty">—</div>';
@@ -1038,7 +1072,7 @@ function ttPrint(all){({class:printClass,teacher:printTeacher,room:printRoom})[T
 
 /* ---- drag & drop ---- */
 let DRG=null,justDragged=0;
-function swapCheck(cid,d1,p1,d2,p2){const tt=S.tt[cid]||{},k1=SK(d1,p1),k2=SK(d2,p2),a=tt[k1],b=tt[k2];
+function swapCheck(cid,d1,p1,d2,p2){const tt=S.tt[cid]||{},k1=SK(d1,p1),k2=SK(d2,p2),a=tt[k1],b=tt[k2];if((a&&a.fx)||(b&&b.fx))return false;
   if(b)tt[k1]=b;else delete tt[k1];if(a)tt[k2]=a;else delete tt[k2];
   const c=C()[cid],AM=A(),idx=busyIndex(S),ri=roomIndex(S);let ok=true;
   [[a,d2,p2],[b,d1,p1]].forEach(([x,d,p])=>{if(!x||!ok)return;const al=AM[x.a];if(!al)return;
@@ -1053,7 +1087,7 @@ function startDrag(){if(!DRG)return;DRG.on=true;const tbl=DRG.td.closest('table'
 function moveGhost(x,y){const g=$('ghost');if(g){g.style.left=(x-40)+'px';g.style.top=(y-30)+'px';}}
 function endDrag(){document.querySelectorAll('.dsrc,.dok,.dbad,.dhover').forEach(t=>t.classList.remove('dsrc','dok','dbad','dhover'));const g=$('ghost');if(g)g.remove();}
 document.addEventListener('pointerdown',e=>{if(!isAdmin||e.button>0)return;const td=e.target.closest('td[data-cid]');if(!td)return;
-  const cell=(S.tt[td.dataset.cid]||{})[SK(+td.dataset.d,+td.dataset.p)];if(!cell)return;
+  const cell=(S.tt[td.dataset.cid]||{})[SK(+td.dataset.d,+td.dataset.p)];if(!cell||cell.fx)return;
   DRG={td,cid:td.dataset.cid,d:+td.dataset.d,p:+td.dataset.p,x:e.clientX,y:e.clientY,on:false,type:e.pointerType,tm:null};
   if(e.pointerType!=='mouse')DRG.tm=setTimeout(startDrag,320);});
 document.addEventListener('pointermove',e=>{if(!DRG)return;const dx=Math.abs(e.clientX-DRG.x)+Math.abs(e.clientY-DRG.y);
@@ -1165,12 +1199,12 @@ function runGen(mode){
   },30);
 }
 function undoGen(){if(!undoStack)return;S.tt=JSON.parse(undoStack);undoStack=null;save();renderGenerate();$('gResult').innerHTML='<div class="note ok">↩️ Restored previous routine.</div>';}
-function unlockAll(){if(!needAdmin())return;ask('Unlock every locked period? Next Auto Generate may move them.',()=>{for(const c in S.tt)for(const k in S.tt[c])S.tt[c][k].l=0;save();toast('🔓 All unlocked');});}
+function unlockAll(){if(!needAdmin())return;ask('Unlock every locked period? Next Auto Generate may move them.',()=>{for(const c in S.tt)for(const k in S.tt[c])if(!S.tt[c][k].fx)S.tt[c][k].l=0;save();toast('🔓 All unlocked');});}
 function clearTT(){if(!needAdmin())return;ask('Clear all periods that are not locked?',()=>{undoStack=JSON.stringify(S.tt);for(const c in S.tt)for(const k in S.tt[c])if(!S.tt[c][k].l)delete S.tt[c][k];save();renderGenerate();toast('Cleared');});}
 
 /* ---- setup ---- */
 let setupTab='school',allocCls='';
-const SETUP_TABS=[['school','🏫 School'],['periods','⏱️ Days & Periods'],['subjects','📚 Subjects'],['teachers','👩‍🏫 Teachers'],['classes','🎓 Classes'],['alloc','🧩 Allocation'],['rooms','🚪 Rooms']];
+const SETUP_TABS=[['fixed','⭐ Devotion / Fixed'],['school','🏫 School'],['periods','⏱️ Days & Periods'],['subjects','📚 Subjects'],['teachers','👩‍🏫 Teachers'],['classes','🎓 Classes'],['alloc','🧩 Allocation'],['rooms','🚪 Rooms']];
 function renderSetup(){
   $('setupTabs').innerHTML=SETUP_TABS.map(t=>`<button class="${t[0]===setupTab?'act':''}" onclick="setupTab='${t[0]}';go('setup')">${t[1]}</button>`).join('');
   const ro=!isAdmin?`<div class="note">🔒 View only. Turn on Admin to edit.</div>`:'';const dis=isAdmin?'':'disabled';
@@ -1216,13 +1250,37 @@ function renderSetup(){
       const L=teacherLoad(S);
       h+=`<div class="card"><div class="row"><label>Class<select onchange="allocCls=this.value;renderSetup()">${S.classes.map(x=>`<option value="${x.id}" ${x.id===allocCls?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">Allotted ${tot} of ${sl} periods/week</span>
       ${isAdmin?`<label>Copy subjects from<select id="cpFrom"><option value="">—</option>${S.classes.filter(x=>x.id!==allocCls).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><button class="btn sm sec" onclick="copyAlloc()">Copy</button>`:''}</div>
-      <div class="tw"><table class="list"><tr><th>Subject</th><th>Teacher</th><th>Periods/week</th><th>Max/day</th><th>Room</th><th></th></tr>`+al.map(a=>`<tr><td><select ${dis} onchange="updAlloc('${a.id}','subject',this.value)">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===a.subject?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','teacherId',this.value)">${S.teachers.map(t=>`<option value="${t.id}" ${t.id===a.teacherId?'selected':''}>${esc(t.name)} (${L[t.id]||0})</option>`).join('')}</select></td><td><input type="number" ${dis} min="0" max="20" style="width:70px" value="${a.ppw}" onchange="updAlloc('${a.id}','ppw',+this.value)"></td><td><input type="number" ${dis} min="0" max="5" style="width:64px" placeholder="auto" value="${a.maxDay||''}" onchange="updAlloc('${a.id}','maxDay',+this.value||0)"></td><td><select ${dis} onchange="updAlloc('${a.id}','room',this.value)">${roomOpts(a.room,'Class room')}</select></td><td>${isAdmin?`<button class="btn sm red" onclick="delAlloc('${a.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addAlloc()">+ Add subject to class</button></div>':''}<p class="muted">Teacher's total load is shown in brackets. Changing allocation does not change the routine until you place it or run Auto Generate.</p></div>`;}
+      <div class="tw"><table class="list"><tr><th>Subject</th><th>Teacher</th><th>Periods/week</th><th>Max/day</th><th>Room</th><th></th></tr>`+al.filter(a=>!a.fixed).map(a=>`<tr><td><select ${dis} onchange="updAlloc('${a.id}','subject',this.value)">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===a.subject?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','teacherId',this.value)">${S.teachers.map(t=>`<option value="${t.id}" ${t.id===a.teacherId?'selected':''}>${esc(t.name)} (${L[t.id]||0})</option>`).join('')}</select></td><td><input type="number" ${dis} min="0" max="20" style="width:70px" value="${a.ppw}" onchange="updAlloc('${a.id}','ppw',+this.value)"></td><td><input type="number" ${dis} min="0" max="5" style="width:64px" placeholder="auto" value="${a.maxDay||''}" onchange="updAlloc('${a.id}','maxDay',+this.value||0)"></td><td><select ${dis} onchange="updAlloc('${a.id}','room',this.value)">${roomOpts(a.room,'Class room')}</select></td><td>${isAdmin?`<button class="btn sm red" onclick="delAlloc('${a.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addAlloc()">+ Add subject to class</button></div>':''}<p class="muted">Teacher's total load is shown in brackets. Changing allocation does not change the routine until you place it or run Auto Generate.</p>${al.filter(a=>a.fixed).map(a=>`<p class="muted">⭐ Fixed: <b>${esc(subj(a.subject).name)}</b> – ${a.ppw} period(s)/week (change in <a href="#setup" onclick="setupTab='fixed'">Devotion / Fixed</a>)</p>`).join('')}</div>`;}
+  }
+  if(setupTab==='fixed'){
+    const res=applyFixed(S);
+    h+=`<div class="card"><h3>⭐ Devotion &amp; Fixed Periods</h3><p class="muted" style="margin-top:0">Reserve a period on chosen days (for example <b>Devotion – Monday, Period 1</b>). Auto Generate never puts a subject there. Choose who takes it: no teacher (whole school together), each class teacher, or one chosen teacher like a normal subject.</p>
+    ${isAdmin?`<div class="row"><button class="btn gold" onclick="addFixed(true)">+ Add Devotion (Monday, Period 1)</button><button class="btn sec" onclick="addFixed(false)">+ Add another fixed period (Assembly, Library…)</button></div>`:''}</div>`;
+    if(res.over.length)h+=`<div class="note err">⚠️ These classes now have more periods than slots: <b>${res.over.map(c=>esc(c.name)).join(', ')}</b>. Reduce one period of some subject in <a href="#setup" onclick="setupTab='alloc';allocCls='${res.over[0].id}'">Allocation</a>, then run Auto Generate.</div>`;
+    const maxP=Math.max(...shifts().map(sh=>nPer(S,sh)));
+    S.fixed.forEach((r,i)=>{
+      h+=`<div class="card" style="border-left:5px solid #ca8a04"><div class="row">
+       <label>Name<input type="text" ${dis} value="${esc(r.label)}" onchange="S.fixed[${i}].label=this.value;fxSave()"></label>
+       <label>Period<select ${dis} onchange="S.fixed[${i}].period=+this.value;fxSave()">${Array.from({length:maxP},(_,p)=>`<option value="${p}" ${r.period===p?'selected':''}>Period ${p+1}</option>`).join('')}</select></label>
+       <label>Shift<select ${dis} onchange="S.fixed[${i}].shift=this.value;fxSave()"><option value="all" ${r.shift==='all'?'selected':''}>Both shifts</option>${shifts().map(s=>`<option value="${s}" ${r.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></label>
+       <label>Taken by<select ${dis} onchange="S.fixed[${i}].by=this.value;fxSave()"><option value="none" ${r.by==='none'?'selected':''}>No teacher (whole school)</option><option value="ct" ${r.by==='ct'?'selected':''}>Class teacher of each class</option>${S.teachers.map(t=>`<option value="${t.id}" ${r.by===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label>
+       ${isAdmin?`<button class="btn sm red" onclick="delFixed(${i})">✕ Remove</button>`:''}</div>
+       <p class="muted" style="margin:4px 0">Days:</p><div class="chips">${DAY_NAMES.map((n,d)=>S.days.includes(d)?`<span class="chip ${r.days.includes(d)?'on':''}" style="${r.days.includes(d)?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxDay(${i},${d})"`:''}>${n}</span>`:'').join('')}</div>
+       <p class="muted" style="margin:8px 0 4px">Classes: <select ${dis} onchange="S.fixed[${i}].classIds=this.value==='all'?'all':S.classes.filter(c=>S.fixed[${i}].shift==='all'||c.shift===S.fixed[${i}].shift).map(c=>c.id);fxSave()"><option value="all" ${r.classIds==='all'?'selected':''}>All classes</option><option value="some" ${r.classIds!=='all'?'selected':''}>Only selected classes</option></select></p>
+       ${r.classIds!=='all'?`<div class="chips">${S.classes.filter(c=>r.shift==='all'||c.shift===r.shift).map(c=>`<span class="chip ${r.classIds.includes(c.id)?'on':''}" style="${r.classIds.includes(c.id)?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxCls(${i},'${c.id}')"`:''}>${esc(c.name)}</span>`).join('')}</div>`:''}
+      </div>`;});
+    if(!S.fixed.length)h+='<p class="muted">No fixed periods yet.</p>';
   }
   if(setupTab==='rooms'){
     h+=`<div class="card"><p class="muted" style="margin-top:0">Shared rooms such as labs and library. Give a subject a room in Allocation (e.g. Computer → Computer Lab); Auto Generate will never put two classes in one room at the same time. Classes without a room use their own class room.</p><div class="tw"><table class="list"><tr><th>Room name</th><th>Used by</th><th></th></tr>${S.rooms.map((r,i)=>`<tr><td><input type="text" ${dis} value="${esc(r.name)}" onchange="S.rooms[${i}].name=this.value;save()"></td><td>${S.alloc.filter(a=>a.room===r.id).length} subject(s)</td><td>${isAdmin?`<button class="btn sm red" onclick="delRoom('${r.id}')">✕</button>`:''}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">No shared rooms</td></tr>'}</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addRoom()">+ Add room</button></div>':''}</div>`;
   }
   $('setupBody').innerHTML=h;
 }
+function fxSave(){const r=applyFixed(S);save();renderSetup();toast(r.displaced?`⭐ Saved. ${r.displaced} lesson(s) moved out – run Auto Generate to place them again.`:'⭐ Saved');}
+function addFixed(dev){if(!needAdmin())return;let n=1;while(S.fixed.some(f=>f.id==='fx'+n))n++;S.fixed.push({id:'fx'+n,label:dev?'Devotion':'Assembly',days:dev?[0]:[S.days[0]],period:0,shift:'all',classIds:'all',by:'none'});fxSave();}
+function delFixed(i){ask('Remove “'+esc(S.fixed[i].label)+'”? Those periods become free for subjects.',()=>{S.fixed.splice(i,1);fxSave();});}
+function fxDay(i,d){const r=S.fixed[i];r.days=r.days.includes(d)?r.days.filter(x=>x!==d):[...r.days,d].sort();fxSave();}
+function fxCls(i,cid){const r=S.fixed[i];r.classIds=r.classIds.includes(cid)?r.classIds.filter(x=>x!==cid):[...r.classIds,cid];fxSave();}
 function roomOpts(sel,blank){return `<option value="">${blank}</option>`+S.rooms.map(r=>`<option value="${r.id}" ${r.id===sel?'selected':''}>${esc(r.name)}</option>`).join('');}
 function addRoom(){let n=S.rooms.length+1;while(S.rooms.some(r=>r.id==='r'+n))n++;S.rooms.push({id:'r'+n,name:'New Room '+n});save();renderSetup();}
 function delRoom(id){ask('Delete this room? Subjects using it go back to their class room.',()=>{S.rooms=S.rooms.filter(r=>r.id!==id);S.alloc.forEach(a=>{if(a.room===id)a.room='';});S.classes.forEach(c=>{if(c.room===id)c.room='';});save();renderSetup();});}
@@ -1299,7 +1357,7 @@ function renderCreate(){
   <div class="chips">${S.classes.map(c=>`<span class="chip ${WZ.t4.has(c.id)?'on':''}" style="${WZ.t4.has(c.id)?'background:var(--navy);border-color:var(--navy)':''}" onclick="wzTog(WZ.t4,'${c.id}')">${esc(c.name)}</span>`).join('')}</div>
   <div class="row" style="margin-top:8px"><button class="btn gold" onclick="wzAddAlloc()">+ Add to selected classes</button></div>`;
   b4+=`<div class="tw"><table class="list"><tr><th>Class</th><th>Class teacher</th><th>Periods</th><th>Subjects (teacher · periods)</th></tr>${S.classes.map(c=>{const al=S.alloc.filter(a=>a.classId===c.id),tot=al.reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
-    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)"><option value="">—</option>${S.teachers.map(t=>`<option value="${t.id}" ${c.ct===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td style="font-size:12px">${al.map(a=>`${esc(a.subject)} · ${esc((TM[a.teacherId]||{}).abbr||'?')} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
+    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)"><option value="">—</option>${S.teachers.map(t=>`<option value="${t.id}" ${c.ct===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td style="font-size:12px">${al.map(a=>a.fixed?`⭐ ${esc(subj(a.subject).name)} · ${a.ppw}`:`${esc(a.subject)} · ${esc((TM[a.teacherId]||{}).abbr||'?')} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
   <p class="muted">Green = class full (all periods given). Amber = periods still free (they stay empty, or fill them by hand). Red = too many periods.</p>`;
   h+=wzCard(4,'Who teaches what',S.alloc.length>0,b4);
   // step 5
