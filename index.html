@@ -512,13 +512,15 @@ function allocMap(S){const m={};S.alloc.forEach(a=>m[a.id]=a);return m;}
 function classMap(S){const m={};S.classes.forEach(c=>m[c.id]=c);return m;}
 function teacherMap(S){const m={};S.teachers.forEach(t=>m[t.id]=t);return m;}
 function nPer(S,shift){return (S.shifts[shift]||{periods:[]}).periods.length;}
+/* parallel group: a.t2 = 2nd teacher, a.s2 = 2nd subject, taught in the same period (e.g. Mizo / Bengali) */
+function TIDS(a){return a?[a.teacherId,a.t2].filter((x,i,r)=>x&&r.indexOf(x)===i):[];}
 
 /* teacher busy index: key tid|shift|d|p -> [classId] */
 function busyIndex(S){
   const A=allocMap(S),C=classMap(S),idx={};
   for(const cid in S.tt){const c=C[cid];if(!c)continue;
-    for(const k in S.tt[cid]){const cell=S.tt[cid][k];const a=A[cell.a];if(!a||!a.teacherId)continue;
-      const key=a.teacherId+'|'+c.shift+'|'+k;(idx[key]=idx[key]||[]).push(cid);}}
+    for(const k in S.tt[cid]){const cell=S.tt[cid][k];const a=A[cell.a];if(!a)continue;
+      TIDS(a).forEach(tid=>{const key=tid+'|'+c.shift+'|'+k;(idx[key]=idx[key]||[]).push(cid);});}}
   return idx;
 }
 function roomOf(S,cid,a){return (a&&a.room)||(S.classes.find(c=>c.id===cid)||{}).room||('cls:'+cid);}
@@ -533,8 +535,8 @@ function clashes(S){
   return out;
 }
 function placedCount(S){const cnt={};for(const cid in S.tt)for(const k in S.tt[cid]){const a=S.tt[cid][k].a;cnt[a]=(cnt[a]||0)+1;}return cnt;}
-function teacherLoad(S){const A=allocMap(S),l={};S.alloc.forEach(a=>l[a.teacherId]=(l[a.teacherId]||0)+(+a.ppw||0));return l;}
-function teacherPlaced(S){const A=allocMap(S),l={};for(const cid in S.tt)for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(a)l[a.teacherId]=(l[a.teacherId]||0)+1;}return l;}
+function teacherLoad(S){const A=allocMap(S),l={};S.alloc.forEach(a=>TIDS(a).forEach(t=>l[t]=(l[t]||0)+(+a.ppw||0)));return l;}
+function teacherPlaced(S){const A=allocMap(S),l={};for(const cid in S.tt)for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(a)TIDS(a).forEach(t=>l[t]=(l[t]||0)+1);}return l;}
 
 /* ===== GENERATOR ===== */
 function generate(S,opt){
@@ -556,8 +558,8 @@ function generate(S,opt){
     const busy={},tDay={},sDay={},aCnt={},rB={};
     const bk=(tid,sh,d,p)=>tid+'|'+sh+'|'+d+'|'+p;
     function mark(cid,d,p,aid,v){
-      const a=A[aid],c=C[cid];busy[bk(a.teacherId,c.shift,d,p)]=(busy[bk(a.teacherId,c.shift,d,p)]||0)+v;
-      tDay[a.teacherId+'|'+d]=(tDay[a.teacherId+'|'+d]||0)+v;
+      const a=A[aid],c=C[cid];TIDS(a).forEach(tid=>{busy[bk(tid,c.shift,d,p)]=(busy[bk(tid,c.shift,d,p)]||0)+v;
+      tDay[tid+'|'+d]=(tDay[tid+'|'+d]||0)+v;});
       sDay[cid+'|'+d+'|'+a.subject]=(sDay[cid+'|'+d+'|'+a.subject]||0)+v;
       aCnt[aid]=(aCnt[aid]||0)+v;
       if(a.room){const rk=a.room+'|'+c.shift+'|'+d+'|'+p;rB[rk]=(rB[rk]||0)+v;}
@@ -568,13 +570,14 @@ function generate(S,opt){
     function ok(cid,d,p,aid,relax){
       const a=A[aid],c=C[cid],t=T[a.teacherId];
       if(tt[cid][SK(d,p)])return false;
-      if(busy[bk(a.teacherId,c.shift,d,p)])return false;
       if(a.room&&rB[a.room+'|'+c.shift+'|'+d+'|'+p])return false;
-      if(unavC[a.teacherId]&&unavC[a.teacherId].has(c.shift+'|'+d+'|'+p))return false;
       const lim=(+a.maxDay||maxSame)+(relax||0);
       if((sDay[cid+'|'+d+'|'+a.subject]||0)>=lim)return false;
-      const tmax=(t&&+t.maxDay)||+S.settings.teacherMaxDay||99;
-      if((tDay[a.teacherId+'|'+d]||0)>=tmax+(relax?1:0))return false;
+      for(const tid of TIDS(a)){const tt2=T[tid];
+        if(busy[bk(tid,c.shift,d,p)])return false;
+        if(unavC[tid]&&unavC[tid].has(c.shift+'|'+d+'|'+p))return false;
+        const tmax=(tt2&&+tt2.maxDay)||+S.settings.teacherMaxDay||99;
+        if((tDay[tid+'|'+d]||0)>=tmax+(relax?1:0))return false;}
       return true;
     }
     function put(cid,d,p,aid,ct){tt[cid][SK(d,p)]=ct?{a:aid,l:0,ct:1}:{a:aid,l:0};mark(cid,d,p,aid,1);}
@@ -627,7 +630,7 @@ function generate(S,opt){
           outer:for(const d of days)for(let p=0;p<np;p++){
             if(tt[cid][SK(d,p)])continue;
             const sh=C[cid].shift;if(!busy[bk(a.teacherId,sh,d,p)])continue;
-            const oc=S.classes.find(c=>c.shift===sh&&target.has(c.id)&&tt[c.id][SK(d,p)]&&!tt[c.id][SK(d,p)].l&&!tt[c.id][SK(d,p)].ct&&A[tt[c.id][SK(d,p)].a].teacherId===a.teacherId);
+            const oc=S.classes.find(c=>c.shift===sh&&target.has(c.id)&&tt[c.id][SK(d,p)]&&!tt[c.id][SK(d,p)].l&&!tt[c.id][SK(d,p)].ct&&TIDS(A[tt[c.id][SK(d,p)].a]).includes(a.teacherId));
             if(!oc)continue;
             const oa=take(oc.id,d,p);
             if(ok(cid,d,p,u.aid,1)){
@@ -766,10 +769,10 @@ function headRow(sh,first){const s=S.shifts[sh];let h=`<tr><th class="day">${fir
   s.periods.forEach((p,i)=>{h+=`<th>P${i+1}<span class="tm">${trange(p[0],p[1])}</span></th>`;if(brkOf(sh,i))h+=`<th class="brkh" style="width:22px"></th>`;});return h+'</tr>';}
 function cellHtml(a,teacherSide,extra,clash){
   if(!a)return `<div class="cell empty">—</div>`;
-  const s=subj(a.subject),t=T()[a.teacherId];
-  const top=teacherSide?esc(C()[a.classId]?.name||''):esc(s.code);
-  const bot=teacherSide?esc(s.code):esc(t?t.abbr:(a.fixed?'⭐':'?'));
-  return `<div class="cell${clash?' clash':''}" style="background:${tint(s.color,.16)};border-left:4px solid ${s.color}" title="${esc(s.name)} – ${esc(t?t.name:'')}"><div class="s">${top}${extra||''}</div><div class="t">${bot}</div></div>`;
+  const s=subj(a.subject),t=T()[a.teacherId],tside=typeof teacherSide==='string'?teacherSide:'';
+  const top=teacherSide?esc(C()[a.classId]?.name||''):esc(aCode(a));
+  const bot=teacherSide?esc(tside?tSub(a,tside):aCode(a)):esc(t?aTNames(a,'abbr'):(a.fixed?'⭐':'?'));
+  return `<div class="cell${clash?' clash':''}" style="background:${tint(s.color,.16)};border-left:4px solid ${s.color}" title="${esc(aName(a))} – ${esc(t?aTNames(a):'')}"><div class="s">${top}${extra||''}</div><div class="t">${bot}</div></div>`;
 }
 function classGridOld(cid,forPrint){
   const c=C()[cid];if(!c)return '<p class="muted">No class.</p>';
@@ -777,7 +780,7 @@ function classGridOld(cid,forPrint){
   let h=`<table>${headRow(sh)}`;
   S.days.forEach((d,ri)=>{h+=`<tr><td class="day"><span class="dl">${DAY_NAMES[d]}</span><span class="ds">${DAY_SHORT[d]}</span></td>`;
     s.periods.forEach((p,i)=>{const cell=tt[SK(d,i)],a=cell&&AM[cell.a];
-      const clash=a&&(idx[a.teacherId+'|'+sh+'|'+d+'|'+i]||[]).length>1;
+      const clash=a&&clashOf(idx,a,sh,d,i);
       h+=`<td ${forPrint?'':`data-cid="${cid}" data-d="${d}" data-p="${i}" onclick="editCell('${cid}',${d},${i})"`}>${cellHtml(a,false,cell&&cell.l?' <span class="lock">🔒</span>':'',clash)}</td>`;
       {const b=brkOf(sh,i);if(b&&ri===0)h+=`<td class="brk" rowspan="${S.days.length}">${esc(b.label||'Break')} ${brkTime(sh,b)}</td>`;}});
     h+='</tr>';});
@@ -787,14 +790,14 @@ function teacherGridOld(tid,forPrint){
   const AM=A(),CM=C();let out='';
   shifts().forEach(sh=>{
     const s=S.shifts[sh];const map={};
-    S.classes.filter(c=>c.shift===sh).forEach(c=>{const tt=S.tt[c.id]||{};for(const k in tt){const a=AM[tt[k].a];if(a&&a.teacherId===tid)(map[k]=map[k]||[]).push(a);}});
-    const has=Object.keys(map).length>0||S.alloc.some(a=>a.teacherId===tid&&CM[a.classId]&&CM[a.classId].shift===sh);
+    S.classes.filter(c=>c.shift===sh).forEach(c=>{const tt=S.tt[c.id]||{};for(const k in tt){const a=AM[tt[k].a];if(a&&TIDS(a).includes(tid))(map[k]=map[k]||[]).push(a);}});
+    const has=Object.keys(map).length>0||S.alloc.some(a=>TIDS(a).includes(tid)&&CM[a.classId]&&CM[a.classId].shift===sh);
     if(!has)return;
     const un=new Set((T()[tid]||{}).unavail||[]);
     let h=`<h3 style="margin:12px 0 6px;color:var(--navy)">${esc(s.name)}</h3><div class="tw"><table>${headRow(sh)}`;
     S.days.forEach((d,ri)=>{h+=`<tr><td class="day"><span class="dl">${DAY_NAMES[d]}</span><span class="ds">${DAY_SHORT[d]}</span></td>`;
       s.periods.forEach((p,i)=>{const L=map[SK(d,i)]||[];
-        h+='<td>'+(L.length?L.map(a=>cellHtml(a,true,'',L.length>1)).join(''):(un.has(sh+'|'+d+'|'+i)?'<div class="cell empty">⛔</div>':'<div class="cell empty" style="color:#1b8a4b">free</div>'))+'</td>';
+        h+='<td>'+(L.length?L.map(a=>cellHtml(a,tid,'',L.length>1)).join(''):(un.has(sh+'|'+d+'|'+i)?'<div class="cell empty">⛔</div>':'<div class="cell empty" style="color:#1b8a4b">free</div>'))+'</td>';
         {const b=brkOf(sh,i);if(b&&ri===0)h+=`<td class="brk" rowspan="${S.days.length}">${esc(b.label||'Break')}</td>`;}});
       h+='</tr>';});
     out+=h+'</table></div>';
@@ -858,9 +861,9 @@ function editCell(cid,d,p){
   if(cur&&cur.fx){modal(`<h3>⭐ ${esc(subj((A()[cur.a]||{}).subject).name)}</h3><p>${esc(c.name)} · ${DAY_NAMES[d]} · Period ${p+1}</p><p class="muted">This is a fixed period. Change or remove it in Setup → Devotion / Fixed.</p><div class="row"><button class="btn" onclick="closeModal();setupTab='fixed';go('setup')">Open Devotion / Fixed</button><button class="btn sec" onclick="closeModal()">Close</button></div>`);return;}
   const al=S.alloc.filter(a=>a.classId===cid&&!a.fixed);
   let h=`<h3>${esc(c.name)} · ${DAY_NAMES[d]} · Period ${p+1} <span class="muted" style="font-size:12px">${ptime(c.shift,p)}</span></h3>`;
-  al.forEach(a=>{const s=subj(a.subject),t=TM[a.teacherId];const bz=(idx[a.teacherId+'|'+c.shift+'|'+d+'|'+p]||[]).filter(x=>x!==cid);
-    const un=t&&(t.unavail||[]).includes(c.shift+'|'+d+'|'+p);const left=a.ppw-(pc[a.id]||0);
-    h+=`<div class="opt ${bz.length||un?'dis':''}" onclick="setCell('${cid}',${d},${p},'${a.id}',${bz.length||un?1:0})"><span class="sw" style="background:${s.color}"></span><div style="flex:1"><b>${esc(s.name)}</b> – ${esc(t?t.name:'?')}<br><span class="muted" style="font-size:12px">${bz.length?'Busy in '+bz.map(x=>esc(C()[x].name)).join(', '):un?'Not available':'Free'} · ${left>0?left+' left to place':left===0?'complete':'over by '+(-left)}</span></div>${cur&&cur.a===a.id?'<span class="pill g">current</span>':''}</div>`;});
+  al.forEach(a=>{const s=subj(a.subject),t=TM[a.teacherId];const bz=[...new Set(TIDS(a).flatMap(x=>(idx[x+'|'+c.shift+'|'+d+'|'+p]||[])))].filter(x=>x!==cid);
+    const un=TIDS(a).some(x=>((TM[x]||{}).unavail||[]).includes(c.shift+'|'+d+'|'+p));const left=a.ppw-(pc[a.id]||0);
+    h+=`<div class="opt ${bz.length||un?'dis':''}" onclick="setCell('${cid}',${d},${p},'${a.id}',${bz.length||un?1:0})"><span class="sw" style="background:${s.color}"></span><div style="flex:1"><b>${esc(aName(a))}</b> – ${esc(t?aTNames(a):'?')}<br><span class="muted" style="font-size:12px">${bz.length?'Busy in '+bz.map(x=>esc(C()[x].name)).join(', '):un?'Not available':'Free'} · ${left>0?left+' left to place':left===0?'complete':'over by '+(-left)}</span></div>${cur&&cur.a===a.id?'<span class="pill g">current</span>':''}</div>`;});
   if(!al.length)h+='<p class="muted">No subject given to this class yet.</p>';
   h+=`<p style="margin:12px 0 4px"><b>Or put any subject &amp; teacher directly:</b></p><div class="row"><select id="dSub">${S.subjects.map(s=>`<option value="${esc(s.code)}">${esc(s.name)}</option>`).join('')}</select><select id="dT">${S.teachers.map(t=>{const bz=(idx[t.id+'|'+c.shift+'|'+d+'|'+p]||[]).filter(x=>x!==cid).length;return `<option value="${t.id}">${esc(t.name)}${bz?' (busy)':''}</option>`;}).join('')}</select><button class="btn sm green" onclick="directCell('${cid}',${d},${p})">Put here</button></div>`;
   h+=`<div class="row" style="margin-top:10px"><button class="btn gold" onclick="startSwap('${cid}',${d},${p})">⇄ Swap with another period</button>${cur?`<button class="btn sec" onclick="lockCell('${cid}',${d},${p})">${cur.l?'🔓 Unlock':'🔒 Lock'}</button><button class="btn red" onclick="setCell('${cid}',${d},${p},'',0)">Clear period</button>`:''}<button class="btn sec" onclick="closeModal()">Close</button></div>`;
@@ -898,7 +901,7 @@ function renderTeacher(){
   const tid=sel.value,t=T()[tid];if(!t){$('tGrid').innerHTML='<p class="muted">Add teachers in Setup.</p>';$('tInfo').innerHTML='';return;}
   const L=teacherLoad(S)[tid]||0,P=teacherPlaced(S)[tid]||0;
   const cls=S.classes.filter(c=>c.ct===tid).map(c=>c.name);
-  const subs=[...new Set(S.alloc.filter(a=>a.teacherId===tid).map(a=>subj(a.subject).name))];
+  const subs=[...new Set(S.alloc.filter(a=>TIDS(a).includes(tid)).map(a=>subj(tSub(a,tid)).name))];
   const per=S.days.map(d=>DAY_SHORT[d]+' '+dayLoad(tid,d));
   $('tInfo').innerHTML=`<div class="row"><span class="pill">Periods/week: ${P}/${L}</span>${per.map(x=>`<span class="pill a">${x}</span>`).join('')}${cls.length?`<span class="pill g">Class teacher: ${esc(cls.join(', '))}</span>`:''}<span class="pill">${esc(subs.join(', ')||'No subject')}</span>${t.phone?`<span class="pill">📞 ${esc(t.phone)}</span>`:''}</div>`;
   $('tGrid').innerHTML=teacherGrid(tid);
@@ -914,13 +917,13 @@ function masterHtml(d,sh,mode){
     let h=`<table>${headRow(sh,'Teacher')}`;
     S.teachers.forEach(t=>{h+=`<tr><td class="day">${esc(t.name)} <span class="muted">${esc(t.abbr)}</span></td>`;
       s.periods.forEach((p,i)=>{const L=idx[t.id+'|'+sh+'|'+d+'|'+i]||[];
-        h+=`<td>${L.length?L.map(cid=>{const a=AM[S.tt[cid][SK(d,i)].a];return cellHtml(a,true,'',L.length>1);}).join(''):'<span style="color:#1b8a4b;font-size:11px">free</span>'}</td>`;
+        h+=`<td>${L.length?L.map(cid=>{const a=AM[S.tt[cid][SK(d,i)].a];return cellHtml(a,t.id,'',L.length>1);}).join(''):'<span style="color:#1b8a4b;font-size:11px">free</span>'}</td>`;
         if(brkOf(sh,i))h+='<td class="brk"></td>';});h+='</tr>';});
     return h+'</table>';
   }
   let h=`<table>${headRow(sh,'Class')}`;
   S.classes.filter(c=>c.shift===sh).forEach(c=>{h+=`<tr><td class="day">${esc(c.name)}</td>`;
-    s.periods.forEach((p,i)=>{const cell=(S.tt[c.id]||{})[SK(d,i)],a=cell&&AM[cell.a];const cl=a&&(idx[a.teacherId+'|'+sh+'|'+d+'|'+i]||[]).length>1;
+    s.periods.forEach((p,i)=>{const cell=(S.tt[c.id]||{})[SK(d,i)],a=cell&&AM[cell.a];const cl=a&&clashOf(idx,a,sh,d,i);
       h+=`<td data-cid="${c.id}" data-d="${d}" data-p="${i}" onclick="editCell('${c.id}',${d},${i})">${cellHtml(a,false,cell&&cell.l?' <span class="lock">🔒</span>':'',cl)}</td>`;if(brkOf(sh,i))h+='<td class="brk"></td>';});h+='</tr>';});
   return h+'</table>';
 }
@@ -983,6 +986,11 @@ function publishTT(){if(!needAdmin())return;const st=clashes(S).length+roomClash
   const doIt=()=>{S.pub={at:new Date().toISOString(),hash:ttHash()};save();renderTT();toast('✅ Timetable published');};
   if(st)ask(`There are ${st} clash(es). Publish anyway?`,doIt);else doIt();}
 function shortRoom(cid,a){const r=roomOf(S,cid,a);return String(r).startsWith('cls:')?'Room '+(C()[cid]||{}).name:roomName(S,r);}
+function aCode(a){return a.s2?a.subject+'/'+a.s2:a.subject;}
+function aName(a){return a.s2?subj(a.subject).name+' / '+subj(a.s2).name:subj(a.subject).name;}
+function aTNames(a,k){const TM=T();return TIDS(a).map(t=>(TM[t]||{})[k||'name']||'?').join(' / ');}
+function tSub(a,tid){return (a.s2&&tid&&tid===a.t2&&tid!==a.teacherId)?a.s2:a.subject;}
+function clashOf(idx,a,sh,d,p){return TIDS(a).some(t=>(idx[t+'|'+sh+'|'+d+'|'+p]||[]).length>1);}
 function typeOf(a){if(a.fixed)return 'fixed';if(a.room)return 'lab';return subj(a.subject).type==='activity'?'activity':'lecture';}
 function tc(o){const bg=o.subst?'#fff1e6':tint(o.color||'#888888',.14),bl=o.subst?'#f97316':TYPEC[o.type]||'#22c55e';
   return `<div class="tc${o.clash?' clash':''}${o.abs?' abs':''}" style="background:${bg};border-left-color:${bl}">${o.subst?'<span class="swi">⇄</span>':''}<div class="tn">${esc(o.title)}${o.lock?' <span class="lock">🔒</span>':''}</div>${o.subst?'<div class="ts">(Substitute)</div>':''}<div class="tl">${esc(o.l1||'')}</div><div class="tl m">${esc(o.l2||'')}</div></div>`;}
@@ -998,7 +1006,7 @@ function ttTable(mode,id,print){
   const shs=mode==='class'?[(CM[id]||{}).shift]:shifts();let out='';
   shs.forEach(sh=>{const s=S.shifts[sh];if(!s)return;
     let any=mode==='class';
-    if(mode==='teacher')any=S.alloc.some(a=>a.teacherId===id&&CM[a.classId]&&CM[a.classId].shift===sh);
+    if(mode==='teacher')any=S.alloc.some(a=>TIDS(a).includes(id)&&CM[a.classId]&&CM[a.classId].shift===sh);
     if(mode==='room')any=String(id).startsWith('cls:')?(CM[id.slice(4)]||{}).shift===sh:S.alloc.some(a=>a.room===id&&CM[a.classId]&&CM[a.classId].shift===sh);
     if(!any&&mode==='teacher'&&!print)any=days.some(d=>{const adj=S.adjust[wk[d]];return adj&&Object.entries(adj.subs||{}).some(([k,v])=>v===id&&CM[k.split('|')[0]]&&CM[k.split('|')[0]].shift===sh);});
     if(!any)return;
@@ -1006,12 +1014,12 @@ function ttTable(mode,id,print){
     s.periods.forEach((per,p)=>{
       h+=`<tr><td class="tper"><b>${p+1}</b><span>${t12(per[0])} –<br>${t12(per[1])}</span></td>`;
       days.forEach(d=>{const items=ttItems(mode,id,sh,d,p,idx,ri);const adj=print?null:S.adjust[wk[d]];let inner='';
-        items.forEach(it=>{const sb=subj(it.a.subject),t=TM[it.a.teacherId]||{};
-          const clash=(idx[it.a.teacherId+'|'+sh+'|'+d+'|'+p]||[]).length>1;
-          const absent=adj&&adj.absent.includes(it.a.teacherId);const subT=absent?TM[(adj.subs||{})[it.cid+'|'+p]]:null;
+        items.forEach(it=>{const sb=subj(mode==='teacher'?tSub(it.a,id):it.a.subject),t={name:TM[it.a.teacherId]?aTNames(it.a):''};
+          const clash=clashOf(idx,it.a,sh,d,p);
+          const absent=adj&&(mode==='teacher'?adj.absent.includes(id):TIDS(it.a).some(x=>adj.absent.includes(x)));const subT=absent?TM[(adj.subs||{})[it.cid+'|'+p]]:null;
           if(mode==='teacher')inner+=tc({title:sb.name,l1:(CM[it.cid]||{}).name,l2:absent?('Absent'+(subT?' · covered by '+subT.name:'')):shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,abs:absent,lock:it.l&&!print});
-          else if(absent)inner+=tc({title:sb.name,subst:1,l1:subT?subT.name:'No substitute yet',l2:mode==='room'?(CM[it.cid]||{}).name:shortRoom(it.cid,it.a),color:sb.color});
-          else inner+=tc({title:(it.a.fixed?'⭐ ':'')+sb.name,l1:mode==='room'?(CM[it.cid]||{}).name+' · '+(t.name||''):(t.name||(it.a.fixed?'Whole school':'')),l2:mode==='room'?'':shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,lock:it.l&&!print});});
+          else if(absent)inner+=tc({title:aName(it.a),subst:1,l1:subT?subT.name:'No substitute yet',l2:mode==='room'?(CM[it.cid]||{}).name:shortRoom(it.cid,it.a),color:sb.color});
+          else inner+=tc({title:(it.a.fixed?'⭐ ':'')+(mode==='room'?sb.name:aName(it.a)),l1:mode==='room'?(CM[it.cid]||{}).name+' · '+(t.name||''):(t.name||(it.a.fixed?'Whole school':'')),l2:mode==='room'?'':shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,lock:it.l&&!print});});
         if(mode==='teacher'&&adj){Object.entries(adj.subs||{}).forEach(([k,v])=>{if(v!==id)return;const [cid,pp]=k.split('|');if(+pp!==p||!CM[cid]||CM[cid].shift!==sh)return;const cell=(S.tt[cid]||{})[SK(d,p)];const a=cell&&AM[cell.a];if(!a)return;
           inner+=tc({title:subj(a.subject).name,subst:1,l1:CM[cid].name+' (for '+((TM[a.teacherId]||{}).abbr||'')+')',l2:shortRoom(cid,a),color:subj(a.subject).color});});}
         if(!inner)inner=mode==='teacher'?'<div class="tc free">Free</div>':'<div class="tc empty">—</div>';
@@ -1078,8 +1086,8 @@ function swapCheck(cid,d1,p1,d2,p2){const tt=S.tt[cid]||{},k1=SK(d1,p1),k2=SK(d2
   if(b)tt[k1]=b;else delete tt[k1];if(a)tt[k2]=a;else delete tt[k2];
   const c=C()[cid],AM=A(),idx=busyIndex(S),ri=roomIndex(S);let ok=true;
   [[a,d2,p2],[b,d1,p1]].forEach(([x,d,p])=>{if(!x||!ok)return;const al=AM[x.a];if(!al)return;
-    if((idx[al.teacherId+'|'+c.shift+'|'+d+'|'+p]||[]).length>1)ok=false;
-    if((T()[al.teacherId]?.unavail||[]).includes(c.shift+'|'+d+'|'+p))ok=false;
+    if(clashOf(idx,al,c.shift,d,p))ok=false;
+    if(TIDS(al).some(x=>(T()[x]?.unavail||[]).includes(c.shift+'|'+d+'|'+p)))ok=false;
     if(al.room&&(ri[al.room+'|'+c.shift+'|'+d+'|'+p]||[]).length>1)ok=false;});
   if(a)tt[k1]=a;else delete tt[k1];if(b)tt[k2]=b;else delete tt[k2];return ok;}
 function startDrag(){if(!DRG)return;DRG.on=true;const tbl=DRG.td.closest('table');
@@ -1121,7 +1129,7 @@ function adjRows(){
   const d=dayIdx(ADJ.date);if(d<0||!S.days.includes(d))return [];
   const AM=A(),rows=[];
   S.classes.forEach(c=>{const tt=S.tt[c.id]||{};nPer(S,c.shift)&&S.shifts[c.shift].periods.forEach((p,i)=>{const cell=tt[SK(d,i)];if(!cell)return;const a=AM[cell.a];
-    if(a&&ADJ.absent.includes(a.teacherId))rows.push({key:c.id+'|'+i,c,p:i,sh:c.shift,a,d});});});
+    if(a&&TIDS(a).some(x=>ADJ.absent.includes(x)))rows.push({key:c.id+'|'+i,c,p:i,sh:c.shift,a,d,tid:TIDS(a).find(x=>ADJ.absent.includes(x))});});});
   rows.sort((x,y)=>(x.sh+x.p).localeCompare(y.sh+y.p)||x.c.name.localeCompare(y.c.name,undefined,{numeric:true}));
   return rows;
 }
@@ -1155,7 +1163,7 @@ function drawAdjust(){
   else{const mc=subCounts(ds.slice(0,7));
     let h=`<table class="list"><tr><th>Shift</th><th>Period</th><th>Class</th><th>Subject</th><th>Absent</th><th>Substitute</th></tr>`;
     rows.forEach(r=>{const cs=candidates(r),cur=ADJ.subs[r.key]||'';
-      h+=`<tr><td>${r.sh==='M'?'Morning':'Noon'}</td><td><b>P${r.p+1}</b><br><span class="muted" style="font-size:11px">${ptime(r.sh,r.p)}</span></td><td>${esc(r.c.name)}</td><td>${esc(subj(r.a.subject).name)}</td><td style="color:var(--red)">${esc(TM[r.a.teacherId].abbr)}</td>
+      h+=`<tr><td>${r.sh==='M'?'Morning':'Noon'}</td><td><b>P${r.p+1}</b><br><span class="muted" style="font-size:11px">${ptime(r.sh,r.p)}</span></td><td>${esc(r.c.name)}</td><td>${esc(subj(tSub(r.a,r.tid)).name)}</td><td style="color:var(--red)">${esc(TM[r.tid||r.a.teacherId].abbr)}</td>
       <td>${(ADJ.manual||{})[r.key]?'<span class="pill a">✋ manual</span> ':''}<select onchange="setSub('${r.key}',this.value)" ${isAdmin?'':'disabled'}><option value="">— choose —</option>${cs.map(t=>`<option value="${t.id}" ${t.id===cur?'selected':''}>${esc(t.name)} (${esc(t.abbr)}) · ${dayLoad(t.id,r.d)} today · ${mc[t.id]||0} this month</option>`).join('')}${cur&&!cs.some(t=>t.id===cur)?`<option value="${cur}" selected>${esc((TM[cur]||{}).name||cur)} ⚠️</option>`:''}</select></td></tr>`;});
     $('aTable').innerHTML=h+'</table>';}
   const txt=waMessage();$('waText').value=txt;$('waLink').href='https://wa.me/?text='+encodeURIComponent(txt);
@@ -1170,7 +1178,7 @@ function waMessage(){
   let m=`*${S.school.name}*\n*PERIOD ADJUSTMENT*\n📅 ${d>=0?DAY_NAMES[d]:''}, ${fmtDate(ds)}\n\n❌ Absent: ${ADJ.absent.map(t=>(TM[t]||{}).name||t).join(', ')}\n`;
   let lastSh='';
   adjRows().forEach(r=>{if(r.sh!==lastSh){m+=`\n*${S.shifts[r.sh].name}*\n`;lastSh=r.sh;}
-    const s=ADJ.subs[r.key];m+=`P${r.p+1} (${t12(S.shifts[r.sh].periods[r.p][0])}) | ${r.c.name} | ${r.a.subject} | ${TM[r.a.teacherId].abbr} ➜ *${s?(TM[s]||{}).name:'—'}*\n`;});
+    const s=ADJ.subs[r.key];m+=`P${r.p+1} (${t12(S.shifts[r.sh].periods[r.p][0])}) | ${r.c.name} | ${tSub(r.a,r.tid)} | ${TM[r.tid||r.a.teacherId].abbr} ➜ *${s?(TM[s]||{}).name:'—'}*\n`;});
   return m+`\n_Kindly take the adjusted periods. Thank you._`;
 }
 function saveAdjust(quiet){if(!needAdmin())return;if(!ADJ.date)return;if(!ADJ.absent.length){delete S.adjust[ADJ.date];}else S.adjust[ADJ.date]={absent:ADJ.absent.slice(),subs:Object.assign({},ADJ.subs),manual:Object.assign({},ADJ.manual||{})};save();drawAdjust();if(!quiet)toast('💾 Adjustment saved for '+fmtDate(ADJ.date));}
@@ -1253,7 +1261,7 @@ function renderSetup(){
       const L=teacherLoad(S);
       h+=`<div class="card"><div class="row"><label>Class<select onchange="allocCls=this.value;renderSetup()">${S.classes.map(x=>`<option value="${x.id}" ${x.id===allocCls?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>${(()=>{const p=cPer(allocCls);return `<span class="pill ${p.cls}">Subjects: ${p.sub} of ${p.free} periods/week</span>${p.fx?`<span class="pill">⭐ ${p.fx} fixed (Devotion/Games) · ${p.sl} in the week</span>`:''}`;})()}
       ${isAdmin?`<label>Copy subjects from<select id="cpFrom"><option value="">—</option>${S.classes.filter(x=>x.id!==allocCls).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><button class="btn sm sec" onclick="copyAlloc()">Copy</button>`:''}</div>
-      <div class="tw"><table class="list"><tr><th>Subject</th><th>Teacher</th><th>Periods/week</th><th>Max/day</th><th>Room</th><th></th></tr>`+al.filter(a=>!a.fixed).map(a=>`<tr><td><select ${dis} onchange="updAlloc('${a.id}','subject',this.value)">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===a.subject?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','teacherId',this.value)">${S.teachers.map(t=>`<option value="${t.id}" ${t.id===a.teacherId?'selected':''}>${esc(t.name)} (${L[t.id]||0})</option>`).join('')}</select></td><td><input type="number" ${dis} min="0" max="20" style="width:70px" value="${a.ppw}" onchange="updAlloc('${a.id}','ppw',+this.value)"></td><td><input type="number" ${dis} min="0" max="5" style="width:64px" placeholder="auto" value="${a.maxDay||''}" onchange="updAlloc('${a.id}','maxDay',+this.value||0)"></td><td><select ${dis} onchange="updAlloc('${a.id}','room',this.value)">${roomOpts(a.room,'Class room')}</select></td><td>${isAdmin?`<button class="btn sm red" onclick="delAlloc('${a.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addAlloc()">+ Add subject to class</button></div>':''}<p class="muted">Teacher's total load is shown in brackets. Changing allocation does not change the routine until you place it or run Auto Generate.</p>${al.filter(a=>a.fixed).map(a=>`<p class="muted">⭐ Fixed: <b>${esc(subj(a.subject).name)}</b> – ${a.ppw} period(s)/week (change in <a href="#setup" onclick="setupTab='fixed'">Devotion / Fixed</a>)</p>`).join('')}</div>`;}
+      <div class="tw"><table class="list"><tr><th>Subject</th><th>Teacher</th><th>Same period, 2nd group<br><span style="font-weight:400;font-size:11px">(e.g. Bengali with Mizo – optional)</span></th><th>Periods/week</th><th>Max/day</th><th>Room</th><th></th></tr>`+al.filter(a=>!a.fixed).map(a=>`<tr><td><select ${dis} onchange="updAlloc('${a.id}','subject',this.value)">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===a.subject?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','teacherId',this.value)">${S.teachers.map(t=>`<option value="${t.id}" ${t.id===a.teacherId?'selected':''}>${esc(t.name)} (${L[t.id]||0})</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','s2',this.value)"><option value="">— none —</option>${S.subjects.filter(s=>!s.fixed).map(s=>`<option value="${esc(s.code)}" ${s.code===a.s2?'selected':''}>${esc(s.name)}</option>`).join('')}</select>${a.s2?`<select ${dis} style="margin-top:4px" onchange="updAlloc('${a.id}','t2',this.value)"><option value="">— choose teacher —</option>${S.teachers.map(t=>`<option value="${t.id}" ${t.id===a.t2?'selected':''}>${esc(t.name)} (${L[t.id]||0})</option>`).join('')}</select>`:''}</td><td><input type="number" ${dis} min="0" max="20" style="width:70px" value="${a.ppw}" onchange="updAlloc('${a.id}','ppw',+this.value)"></td><td><input type="number" ${dis} min="0" max="5" style="width:64px" placeholder="auto" value="${a.maxDay||''}" onchange="updAlloc('${a.id}','maxDay',+this.value||0)"></td><td><select ${dis} onchange="updAlloc('${a.id}','room',this.value)">${roomOpts(a.room,'Class room')}</select></td><td>${isAdmin?`<button class="btn sm red" onclick="delAlloc('${a.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addAlloc()">+ Add subject to class</button></div>':''}<p class="muted">Teacher's total load is shown in brackets. Changing allocation does not change the routine until you place it or run Auto Generate.</p>${al.filter(a=>a.fixed).map(a=>`<p class="muted">⭐ Fixed: <b>${esc(subj(a.subject).name)}</b> – ${a.ppw} period(s)/week (change in <a href="#setup" onclick="setupTab='fixed'">Devotion / Fixed</a>)</p>`).join('')}</div>`;}
   }
   if(setupTab==='fixed'){
     const res=applyFixed(S);
@@ -1313,16 +1321,17 @@ function addSubj(){S.subjects.push({code:'NEW'+(S.subjects.length+1),name:'New s
 function renameSubj(i,v){v=v.trim().toUpperCase();if(!v||S.subjects.some((s,j)=>j!==i&&s.code===v)){toast('Code must be unique');renderSetup();return;}const old=S.subjects[i].code;S.subjects[i].code=v;S.alloc.forEach(a=>{if(a.subject===old)a.subject=v;});save();renderSetup();}
 function delSubj(i){const s=S.subjects[i];const used=S.alloc.filter(a=>a.subject===s.code);ask(`Delete ${esc(s.name)}?${used.length?' It is used in '+used.length+' allocation(s); they and their periods will be removed.':''}`,()=>{used.forEach(a=>removeAlloc(a.id));S.subjects.splice(i,1);save();renderSetup();});}
 function addTeacher(){let n=S.teachers.length+1;while(S.teachers.some(t=>t.id==='t'+n))n++;S.teachers.push({id:'t'+n,name:'New Teacher '+n,abbr:'NT'+n,phone:'',maxDay:6,unavail:[]});save();renderSetup();}
-function delTeacher(id){const n=S.alloc.filter(a=>a.teacherId===id).length;ask(`Delete ${esc(T()[id].name)}?${n?' Their '+n+' allocation(s) and periods will be removed.':''}`,()=>{S.alloc.filter(a=>a.teacherId===id).forEach(a=>removeAlloc(a.id));S.teachers=S.teachers.filter(t=>t.id!==id);S.classes.forEach(c=>{if(c.ct===id)c.ct='';});save();renderSetup();});}
+function delTeacher(id){const n=S.alloc.filter(a=>a.teacherId===id).length;ask(`Delete ${esc(T()[id].name)}?${n?' Their '+n+' allocation(s) and periods will be removed.':''}`,()=>{S.alloc.filter(a=>a.teacherId===id).forEach(a=>removeAlloc(a.id));S.alloc.forEach(a=>{if(a.t2===id){a.t2='';a.s2='';}});S.teachers=S.teachers.filter(t=>t.id!==id);S.classes.forEach(c=>{if(c.ct===id)c.ct='';});save();renderSetup();});}
 function addClass(){let n=S.classes.length+1;while(S.classes.some(c=>c.id==='c'+n))n++;S.classes.push({id:'c'+n,name:'New Class '+n,shift:shifts()[0],ct:''});S.tt['c'+n]={};save();renderSetup();}
 function delClass(id){ask(`Delete class ${esc(C()[id].name)} with its routine?`,()=>{S.alloc=S.alloc.filter(a=>a.classId!==id);delete S.tt[id];S.classes=S.classes.filter(c=>c.id!==id);save();renderSetup();});}
 function removeAlloc(aid){S.alloc=S.alloc.filter(a=>a.id!==aid);for(const c in S.tt)for(const k in S.tt[c])if(S.tt[c][k].a===aid)delete S.tt[c][k];}
 function addAlloc(){S.alloc.push({id:uid(),classId:allocCls,subject:(S.subjects[0]||{}).code||'',teacherId:(S.teachers[0]||{}).id||'',ppw:1});save();renderSetup();}
 function delAlloc(aid){removeAlloc(aid);save();renderSetup();}
-function updAlloc(aid,f,v){const a=S.alloc.find(x=>x.id===aid);if(!a)return;a[f]=v;
+function updAlloc(aid,f,v){const a=S.alloc.find(x=>x.id===aid);if(!a)return;a[f]=v;if(f==='s2'&&!v)a.t2='';
+  if(f==='s2'&&v){const dup=S.alloc.find(x=>x.id!==aid&&x.classId===a.classId&&!x.fixed&&x.subject===v);if(dup){if(!a.t2)a.t2=dup.teacherId;removeAlloc(dup.id);toast('Separate '+subj(v).name+' row removed – it now shares the period');}}
   if(f==='ppw'){const pl=[];for(const k in S.tt[a.classId]||{})if(S.tt[a.classId][k].a===aid)pl.push(k);while(pl.length>v){delete S.tt[a.classId][pl.pop()];}}
   save();renderSetup();}
-function copyAlloc(){const from=$('cpFrom').value;if(!from)return;S.alloc.filter(a=>a.classId===from).forEach(a=>S.alloc.push({id:uid(),classId:allocCls,subject:a.subject,teacherId:a.teacherId,ppw:a.ppw,maxDay:a.maxDay}));save();renderSetup();toast('Copied – now change the teachers');}
+function copyAlloc(){const from=$('cpFrom').value;if(!from)return;S.alloc.filter(a=>a.classId===from).forEach(a=>S.alloc.push({id:uid(),classId:allocCls,subject:a.subject,teacherId:a.teacherId,ppw:a.ppw,maxDay:a.maxDay,s2:a.s2||'',t2:a.t2||''}));save();renderSetup();toast('Copied – now change the teachers');}
 function unavailDlg(tid){
   const t=T()[tid];let h=`<h3>⛔ ${esc(t.name)} – not available</h3><p class="muted">Tap periods when this teacher must not get a class (meetings, other duty).</p>`;
   shifts().forEach(sh=>{const s=S.shifts[sh];h+=`<p><b>${esc(s.name)}</b></p><div class="ug" style="grid-template-columns:44px repeat(${s.periods.length},1fr)"><span></span>${s.periods.map((p,i)=>`<span style="text-align:center;font-size:11px">P${i+1}</span>`).join('')}`;
@@ -1394,7 +1403,7 @@ function renderCreate(){
   <div class="chips">${S.classes.filter(c=>c.shift===s4).map(c=>`<span class="chip ${WZ.t4.has(c.id)?'on':''}" style=""${WZ.t4.has(c.id)?'background:var(--navy);border-color:var(--navy)':''}" onclick="wzTog(WZ.t4,'${c.id}')">${esc(c.name)}</span>`).join('')}</div>
   <div class="row" style="margin-top:8px"><button class="btn gold" onclick="wzAddAlloc()">+ Add to selected classes</button></div>`;
   b4+=`<div class="tw"><table class="list"><tr><th>Class</th><th>Class teacher</th><th>Periods</th><th>Subjects (teacher · periods)</th></tr>${S.classes.filter(c=>c.shift===s4).map(c=>{const al=S.alloc.filter(a=>a.classId===c.id),tot=al.reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
-    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)">${teacherOptions(c.ct,c.shift,'—')}</select></td><td>${perPill(c.id)}</td><td style="font-size:12px">${al.map(a=>a.fixed?`⭐ ${esc(subj(a.subject).name)} · ${a.ppw}`:`${esc(a.subject)} · ${esc((TM[a.teacherId]||{}).abbr||'?')} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
+    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)">${teacherOptions(c.ct,c.shift,'—')}</select></td><td>${perPill(c.id)}</td><td style="font-size:12px">${al.map(a=>a.fixed?`⭐ ${esc(subj(a.subject).name)} · ${a.ppw}`:`${esc(aCode(a))} · ${esc(aTNames(a,'abbr'))} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
   <p class="muted">Periods = subject periods given / periods free for subjects (the week minus ⭐ fixed periods like Devotion and Games). Green = full, amber = some still free, red = too many.</p>`;
   h+=wzCard(4,'Who teaches what',S.alloc.length>0,b4);
   // step 5
@@ -1453,7 +1462,7 @@ function reportHtml(tab){
     if(!cl.length)return '<div class="note ok">✅ No teacher clash in the routine.</div>'+rh;
     return `<div class="tw"><table class="list"><tr><th>Teacher</th><th>Day</th><th>Shift</th><th>Period</th><th>Classes</th></tr>`+cl.map(x=>`<tr><td>${esc(x.teacher)}</td><td>${DAY_NAMES[x.d]}</td><td>${esc(S.shifts[x.shift].name)}</td><td>P${x.p+1}</td><td>${x.classes.map(c=>esc(CM[c].name)).join(', ')}</td></tr>`).join('')+'</table></div>'+rh;}
   if(tab==='subj'){let h=`<div class="tw"><table class="list"><tr><th>Subject</th><th>Teachers (classes)</th><th>Periods/wk</th></tr>`;
-    S.subjects.forEach(s=>{const al=S.alloc.filter(a=>a.subject===s.code);if(!al.length)return;const by={};al.forEach(a=>{(by[a.teacherId]=by[a.teacherId]||[]).push(CM[a.classId]?.name);});
+    S.subjects.forEach(s=>{const al=S.alloc.filter(a=>a.subject===s.code);if(!al.length&&!S.alloc.some(a=>a.s2===s.code))return;const by={};al.forEach(a=>{(by[a.teacherId]=by[a.teacherId]||[]).push(CM[a.classId]?.name);});S.alloc.filter(a=>a.s2===s.code&&a.t2).forEach(a=>{(by[a.t2]=by[a.t2]||[]).push(CM[a.classId]?.name);});
       h+=`<tr><td><b>${esc(s.name)}</b></td><td>${Object.entries(by).map(([t,cs])=>`${esc((TM[t]||{}).abbr||'?')}: ${esc(cs.join(', '))}`).join('<br>')}</td><td>${al.reduce((x,a)=>x+(+a.ppw||0),0)}</td></tr>`;});return h+'</table></div>';}
   return '';
 }
@@ -1464,12 +1473,12 @@ const sig=()=>`<div class="sig"><span>Time Table In-charge</span><span>${esc(S.s
 function doPrint(html){$('printArea').innerHTML=html;try{window.print();}catch(e){}setTimeout(()=>toast('If the print window did not open, open this app file directly in Chrome and print from there.'),900);}
 function printClass(all){const ids=all?S.classes.map(c=>c.id):[TV.mode==='class'&&TV.id?TV.id:S.classes[0].id];
   doPrint(ids.map(id=>{const c=C()[id];return `<div class="pg">${pHead('CLASS TIME TABLE – '+esc(c.name),esc(S.shifts[c.shift].name)+' · Class Teacher: '+esc((T()[c.ct]||{}).name||'—'))}${classGrid(id,true)}${legend(id)}${sig()}</div>`;}).join(''));}
-function legend(cid){const al=S.alloc.filter(a=>a.classId===cid);return `<p style="font-size:11px;margin-top:8px">${al.map(a=>`<b>${esc(a.subject)}</b> ${esc(subj(a.subject).name)} – ${esc((T()[a.teacherId]||{}).name||'')}`).join(' · ')}</p>`;}
+function legend(cid){const al=S.alloc.filter(a=>a.classId===cid);return `<p style="font-size:11px;margin-top:8px">${al.map(a=>`<b>${esc(aCode(a))}</b> ${esc(aName(a))} – ${esc(aTNames(a))}`).join(' · ')}</p>`;}
 function printTeacher(all){const ids=all?S.teachers.map(t=>t.id):[TV.mode==='teacher'&&TV.id?TV.id:S.teachers[0].id];
   doPrint(ids.map(id=>{const t=T()[id];return `<div class="pg">${pHead('TEACHER TIME TABLE – '+esc(t.name)+' ('+esc(t.abbr)+')','Periods/week: '+(teacherPlaced(S)[id]||0))}${teacherGrid(id,true)}${sig()}</div>`;}).join(''));}
 function printMaster(){const d=+$('mDay').value,sh=$('mShift').value;doPrint(`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,$('mMode').value)}${sig()}</div>`);}
 function printAdjust(){if(!ADJ.absent.length){toast('Nothing to print');return;}const TM=T(),d=dayIdx(ADJ.date);
-  doPrint(`<div class="pg">${pHead('PERIOD ADJUSTMENT – '+(d>=0?DAY_NAMES[d]:'')+', '+fmtDate(ADJ.date),'Absent: '+ADJ.absent.map(t=>esc(TM[t].name)).join(', '))}<table><tr><th>Shift</th><th>Period</th><th>Time</th><th>Class</th><th>Subject</th><th>Absent teacher</th><th>Substitute</th><th>Signature</th></tr>${adjRows().map(r=>`<tr><td>${esc(S.shifts[r.sh].name)}</td><td>P${r.p+1}</td><td>${ptime(r.sh,r.p)}</td><td>${esc(r.c.name)}</td><td>${esc(subj(r.a.subject).name)}</td><td>${esc(TM[r.a.teacherId].name)}</td><td><b>${esc((TM[ADJ.subs[r.key]]||{}).name||'')}</b></td><td style="width:90px"></td></tr>`).join('')}</table>${sig()}</div>`);}
+  doPrint(`<div class="pg">${pHead('PERIOD ADJUSTMENT – '+(d>=0?DAY_NAMES[d]:'')+', '+fmtDate(ADJ.date),'Absent: '+ADJ.absent.map(t=>esc(TM[t].name)).join(', '))}<table><tr><th>Shift</th><th>Period</th><th>Time</th><th>Class</th><th>Subject</th><th>Absent teacher</th><th>Substitute</th><th>Signature</th></tr>${adjRows().map(r=>`<tr><td>${esc(S.shifts[r.sh].name)}</td><td>P${r.p+1}</td><td>${ptime(r.sh,r.p)}</td><td>${esc(r.c.name)}</td><td>${esc(subj(tSub(r.a,r.tid)).name)}</td><td>${esc(TM[r.tid||r.a.teacherId].name)}</td><td><b>${esc((TM[ADJ.subs[r.key]]||{}).name||'')}</b></td><td style="width:90px"></td></tr>`).join('')}</table>${sig()}</div>`);}
 function printReport(){doPrint(`<div class="pg">${pHead('REPORT')}${reportHtml(repTab)}</div>`);}
 
 /* ---- backup / export ---- */
