@@ -422,6 +422,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
   <li><b>Setup → Allocation</b>: for every class, which teacher teaches which subject and how many periods a week. The total should not exceed the class's weekly periods.</li>
   <li>Teachers who are not available in some periods: <b>Setup → Teachers → ⛔ Slots</b>.</li>
   <li><b>Auto Generate</b> builds the routine with no teacher clash. Then adjust by hand in <b>Class Time Table</b>: tap a period to change it or ⇄ swap two periods. Hand changes are locked 🔒, so you can run Auto Generate again and it fills the rest around them.</li>
+  <li><b>Summer / Winter timing</b>: Periods &amp; Breaks → choose Summer or Winter and set its times (⏱️ Auto timing works for each). Tick “Switch automatically by date” and set the winter dates – the app changes timing by itself.</li>
   <li><b>Timetable</b> screen: switch Class / Teacher / Room and Week / Day; use Today ‹ › to see substitutions of any date in orange. Publish when ready.</li>
   <li><b>Drag &amp; drop</b>: in Timetable (Class) or Master Routine, drag a period onto another to swap (phone: press and hold, then drag). Green cells are safe; red would make a clash.</li>
   <li><b>Rooms</b>: add labs in Setup → Rooms and give subjects a room in Allocation. See <b>Room Time Table</b>. <b>Teacher Workload</b> shows daily and weekly periods plus substitutions. <b>Print Centre</b> prints class-, teacher- and room-wise.</li>
@@ -461,6 +462,10 @@ function sampleState(){
     settings:{pin:'1234',maxSame:2,ctFirst:true,attempts:40,teacherMaxDay:6},
     subjects:[],teachers:[],classes:[],alloc:[],tt:{},adjust:{},rooms:[{id:'rCL',name:'Computer Lab'},{id:'rSL',name:'Science Lab'},{id:'rLIB',name:'Library'}]
   };
+  const mkT=(start,len,brk,n)=>{let [h,m]=start.split(':').map(Number),t=h*60+m;const f=x=>String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');const out=[];for(let i=0;i<n;i++){out.push([f(t),f(t+len)]);t+=len;if(brk[i+1]&&i<n-1)t+=brk[i+1];}return out;};
+  S.season={cur:'summer',auto:true,wFrom:'2026-11-01',wTo:'2027-02-28'};
+  S.shifts.M.times={summer:JSON.parse(JSON.stringify(S.shifts.M.periods)),winter:mkT('07:50',35,{3:20},6)};
+  S.shifts.N.times={summer:JSON.parse(JSON.stringify(S.shifts.N.periods)),winter:mkT('12:00',35,{2:10,5:20},7)};
   const subj=[['ENG','English','#2563eb'],['MAT','Mathematics','#dc2626'],['SCI','Science','#059669'],['SST','Social Studies','#d97706'],
     ['EVS','EVS','#16a34a'],['MIZ','Mizo','#7c3aed'],['HIN','Hindi','#db2777'],['COM','Computer','#0891b2'],['DRW','Drawing','#ea580c'],
     ['MOR','Moral Science','#4f46e5'],['GK','G.K.','#65a30d'],['GAM','Games / P.E.','#0d9488'],['PHY','Physics','#1d4ed8'],
@@ -660,13 +665,26 @@ function fix(){S.adjust=S.adjust||{};S.rooms=S.rooms||[];S.theme=S.theme||'green
   S.subjects.forEach(s=>{if(!s.type)s.type=['GAM','DRW','MOR','GK'].includes(s.code)?'activity':'lecture';});S.tt=S.tt||{};S.settings=Object.assign({pin:'1234',maxSame:2,ctFirst:true,attempts:40,teacherMaxDay:6},S.settings||{});
   S.teachers.forEach(t=>{t.unavail=t.unavail||[];});
   for(const k in S.shifts){const s=S.shifts[k];if(!s.breaks){s.breaks=s.breakAfter?[{after:+s.breakAfter,label:s.breakLabel||'Break'}]:[];delete s.breakAfter;delete s.breakLabel;delete s.breakTime;}}
-  if(S.settings.autoAdj===undefined)S.settings.autoAdj=true;}
+  if(S.settings.autoAdj===undefined)S.settings.autoAdj=true;
+  if(!S.season)S.season={cur:'summer',auto:false,wFrom:'2026-11-01',wTo:'2027-02-28'};
+  for(const k in S.shifts){const s=S.shifts[k];if(!s.times)s.times={summer:JSON.parse(JSON.stringify(s.periods)),winter:JSON.parse(JSON.stringify(s.periods))};}}
 let UNDO=[],LASTJ=null;
-function save(){const now=JSON.stringify(S);if(LASTJ&&now!==LASTJ){UNDO.push(LASTJ);if(UNDO.length>40)UNDO.shift();}LASTJ=now;try{localStorage.setItem(LS,now);}catch(e){}updUndo();}
+const SEASONS={summer:'☀️ Summer timing',winter:'❄️ Winter timing'};
+function fitLen(arr,n){arr=JSON.parse(JSON.stringify(arr||[]));while(arr.length>n)arr.pop();while(arr.length<n){const l=arr[arr.length-1]||['08:00','08:40'];arr.push([l[1],l[1]]);}return arr;}
+function syncSeason(){if(!S||!S.season)return;for(const k in S.shifts){const s=S.shifts[k];if(!s.times)continue;const n=s.periods.length;s.times[S.season.cur]=JSON.parse(JSON.stringify(s.periods));for(const o in s.times)if(o!==S.season.cur)s.times[o]=fitLen(s.times[o],n);}}
+function setSeason(x,quiet){if(!S.season||S.season.cur===x){return;}syncSeason();S.season.cur=x;for(const k in S.shifts){const s=S.shifts[k];if(s.times)s.periods=fitLen(s.times[x],s.periods.length);}
+  if(!quiet){save();render(curView);toast(SEASONS[x]+' is now active');}}
+function seasonFor(ds){const se=S.season;if(!se)return 'summer';const md=ds.slice(5),f=(se.wFrom||'').slice(5),t=(se.wTo||'').slice(5);if(!f||!t)return se.cur;return (f<=t?(md>=f&&md<=t):(md>=f||md<=t))?'winter':'summer';}
+function autoSeason(){if(S.season&&S.season.auto){const want=seasonFor(todayStr());if(want!==S.season.cur){setSeason(want,true);try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}}}
+const seasonTag=()=>S.season?SEASONS[S.season.cur]:'';
+function overlapWarn(){const sh=shifts();if(sh.length<2)return '';const a=S.shifts[sh[0]],b=S.shifts[sh[1]];if(!a.periods.length||!b.periods.length)return '';
+  const aEnd=a.periods[a.periods.length-1][1],bStart=b.periods[0][0],bEnd=b.periods[b.periods.length-1][1],aStart=a.periods[0][0];
+  if(aEnd>bStart&&bEnd>aStart)return `<div class="note err">⚠️ ${esc(a.name)} ends at ${t12(aEnd)} but ${esc(b.name)} starts at ${t12(bStart)}. Teachers who teach in both shifts may get two classes at the same time. Make the morning shift end before the noon shift starts.</div>`;return '';}
+function save(){syncSeason();const now=JSON.stringify(S);if(LASTJ&&now!==LASTJ){UNDO.push(LASTJ);if(UNDO.length>40)UNDO.shift();}LASTJ=now;try{localStorage.setItem(LS,now);}catch(e){}updUndo();}
 function updUndo(){const b=$('undoTop');if(b){b.style.display=isAdmin?'inline-block':'none';b.disabled=!UNDO.length;b.style.opacity=UNDO.length?1:.45;}}
 function undoLast(){if(!needAdmin())return;if(!UNDO.length){toast('Nothing to undo');return;}const j=UNDO.pop();S=JSON.parse(j);fix();LASTJ=JSON.stringify(S);try{localStorage.setItem(LS,LASTJ);}catch(e){}refreshHeader();render(curView);updUndo();toast('↶ Undone ('+UNDO.length+' more step'+(UNDO.length===1?'':'s')+' available)');}
 function resetShift(sh){if(!needAdmin())return;const def=sampleState().shifts[sh];if(!def){toast('No default for this shift');return;}
-  ask('Reset '+esc(S.shifts[sh].name)+' periods, timings and breaks to the default?',()=>{S.shifts[sh]=JSON.parse(JSON.stringify(def));const n=def.periods.length;S.classes.filter(c=>c.shift===sh).forEach(c=>{for(const k in S.tt[c.id]||{})if(+k.split('|')[1]>=n)delete S.tt[c.id][k];});save();render(curView);toast('↺ Default timings restored');});}
+  ask('Reset '+esc(S.shifts[sh].name)+' periods, timings and breaks to the default?',()=>{S.shifts[sh]=JSON.parse(JSON.stringify(def));if(def.times&&S.season)S.shifts[sh].periods=JSON.parse(JSON.stringify(def.times[S.season.cur]||def.periods));const n=def.periods.length;S.classes.filter(c=>c.shift===sh).forEach(c=>{for(const k in S.tt[c.id]||{})if(+k.split('|')[1]>=n)delete S.tt[c.id][k];});save();render(curView);toast('↺ Default timings restored');});}
 function resetDays(){S.days=[0,1,2,3,4];for(const c in S.tt)for(const k in S.tt[c])if(+k.split('|')[0]>4)delete S.tt[c][k];save();render(curView);toast('↺ Monday–Friday restored');}
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2300);}
 function modal(h){$('mbox').innerHTML=h;$('modal').classList.add('show');}
@@ -771,7 +789,7 @@ function renderHome(){
   $('homeWarn').innerHTML=w;
   // now
   const now=new Date(),d=now.getDay()-1,hm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  let nb='';
+  let nb=`<p><span class="pill ${S.season&&S.season.cur==='winter'?'':'a'}">${seasonTag()}</span></p>`;
   if(d<0||!S.days.includes(d))nb='<p class="muted">No classes today.</p>';
   else shifts().forEach(sh=>{const s=S.shifts[sh];const p=s.periods.findIndex(x=>hm>=x[0]&&hm<x[1]);const br=(s.breaks||[]).find(b=>s.periods[b.after]&&hm>=s.periods[b.after-1][1]&&hm<s.periods[b.after][0]);
     nb+=`<p><b>${esc(s.name)}:</b> ${p>=0?`Period ${p+1} (${ptime(sh,p)})`:(hm<s.periods[0][0]?'not started':(hm>=s.periods[s.periods.length-1][1]?'over':(br?esc(br.label)+' ('+brkTime(sh,br)+')':'—')))}</p>`;});
@@ -985,7 +1003,7 @@ function renderTT(){
   $('pubBtn').style.display=isAdmin?'':'none';
   const wk=weekDates(TV.week),CM=C(),TM=T(),AM=A();
   const name=TV.mode==='class'?'Class '+((CM[TV.id]||{}).name||''):TV.mode==='teacher'?((TM[TV.id]||{}).name||''):(TV.id?roomName(S,TV.id):'');
-  $('ttSub').textContent='Visual timetable for '+name+' · '+(TV.view==='day'?DAY_NAMES[TV.day]+', '+fmtShort(wk[TV.day]):'Week of '+fmtShort(wk[S.days[0]])+' – '+fmtShort(wk[S.days[S.days.length-1]]));
+  $('ttSub').textContent='Visual timetable for '+name+' · '+seasonTag()+' · '+(TV.view==='day'?DAY_NAMES[TV.day]+', '+fmtShort(wk[TV.day]):'Week of '+fmtShort(wk[S.days[0]])+' – '+fmtShort(wk[S.days[S.days.length-1]]));
   $('ttHint').innerHTML=TV.mode==='class'?(isAdmin?'✋ Drag a period onto another to swap (phone: press &amp; hold, then drag). Tap a period to change it.':'🔒 Turn on Admin to edit.'):'';
   if(!TV.id){$('ttGrid').innerHTML='<p class="muted">Nothing to show yet. Use Timetable Builder.</p>';$('ttKpi').innerHTML='';$('ttStrip').innerHTML='';$('ttAllocCard').style.display='none';return;}
   $('ttGrid').innerHTML=ttTable(TV.mode,TV.id,false);
@@ -1160,6 +1178,14 @@ function renderSetup(){
   if(setupTab==='school'){h+=`<div class="card"><div class="row" style="flex-direction:column;align-items:stretch">
     ${[['name','School name'],['address','Address'],['session','Session'],['principal','Principal name (for print)']].map(f=>`<label>${f[1]}<input type="text" ${dis} value="${esc(S.school[f[0]]||'')}" onchange="S.school['${f[0]}']=this.value;save();refreshHeader()"></label>`).join('')}</div></div>`;}
   if(setupTab==='periods'){
+    const se=S.season;
+    h+=`<div class="card" style="border-left:5px solid ${se.cur==='winter'?'#3b82f6':'#f59e0b'}"><h3>☀️ Summer / ❄️ Winter timing</h3>
+     <p class="muted" style="margin-top:0">Both seasons use the same periods, breaks and routine. Only the times are different. The timings below are for the season selected here.</p>
+     <div class="row"><div class="seg">${['summer','winter'].map(x=>`<button class="${se.cur===x?'act':''}" ${isAdmin?`onclick="setSeason('${x}')"`:'disabled'}>${SEASONS[x]}</button>`).join('')}</div>
+     <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" ${dis} ${se.auto?'checked':''} onchange="S.season.auto=this.checked;save();autoSeason();renderSetup()"> Switch automatically by date</label>
+     <label>Winter from<input type="date" ${dis} value="${se.wFrom}" onchange="S.season.wFrom=this.value;save();autoSeason();renderSetup()"></label>
+     <label>Winter to<input type="date" ${dis} value="${se.wTo}" onchange="S.season.wTo=this.value;save();autoSeason();renderSetup()"></label></div>
+     <div class="note ${se.cur==='winter'?'':'ok'}" style="margin:0">Now showing and editing: <b>${SEASONS[se.cur]}</b>${se.auto?' (chosen automatically for today)':''}</div></div>`+overlapWarn();
     h+=`<div class="card"><h3>Working days ${isAdmin?'<button class="btn sm sec" onclick="resetDays()" style="float:right">↺ Mon–Fri default</button>':''}</h3><div class="row">${DAY_NAMES.map((n,i)=>`<label style="flex-direction:row;gap:5px;color:var(--ink)"><input type="checkbox" ${dis} ${S.days.includes(i)?'checked':''} onchange="toggleDay(${i},this.checked)"> ${n}</label>`).join('')}</div></div>`;
     shifts().forEach(sh=>{const s=S.shifts[sh];
       h+=`<div class="card"><h3>${esc(s.name)}</h3><div class="row"><label>Shift name<input type="text" ${dis} value="${esc(s.name)}" onchange="S.shifts['${sh}'].name=this.value;save()"></label>
@@ -1249,7 +1275,7 @@ function renderCreate(){
   // step 1
   let b1=`<div class="row">${DAY_NAMES.map((n,i)=>`<label style="flex-direction:row;gap:5px;color:var(--ink)"><input type="checkbox" ${S.days.includes(i)?'checked':''} onchange="toggleDay(${i},this.checked);renderCreate()"> ${n.slice(0,3)}</label>`).join('')}</div>`;
   shifts().forEach(sh=>{const s=S.shifts[sh];b1+=`<p style="margin:6px 0"><b>${esc(s.name)}</b>: ${s.periods.length} periods, ${s.periods[0]?t12(s.periods[0][0]):''} – ${s.periods.length?t12(s.periods[s.periods.length-1][1]):''}; ${(s.breaks||[]).map(b=>esc(b.label)+' after P'+b.after+' ('+brkTime(sh,b)+')').join(', ')||'no break'} <button class="btn sm gold" onclick="timingDlg('${sh}')">⏱️ Change timing</button></p>`;});
-  b1+=`<p class="muted" style="margin:4px 0 0">To rename or add breaks: <a href="#setup" onclick="setupTab='periods'">Setup → Days &amp; Periods</a>.</p>`;
+  b1+=`<p style="margin:6px 0"><span class="pill">${seasonTag()}</span> <a href="#setup" onclick="setupTab='periods'">Set Summer / Winter timings</a></p><p class="muted" style="margin:4px 0 0">To rename or add breaks: <a href="#setup" onclick="setupTab='periods'">Setup → Days &amp; Periods</a>.</p>`;
   h+=wzCard(1,'Days &amp; periods',S.days.length>0,b1);
   // step 2
   let b2=`<div class="row"><label>Shift<select onchange="WZ.shift=this.value">${shifts().map(s=>`<option value="${s}" ${WZ.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></label></div>
@@ -1332,7 +1358,7 @@ function reportHtml(tab){
 }
 
 /* ---- print ---- */
-function pHead(t,sub){return `<div class="ph" style="display:flex;align-items:center;justify-content:center;gap:14px;text-align:center;margin-bottom:8px"><img src="${$('logoImg').src}" style="width:70px;height:70px"><div><h2 style="margin:0">${esc(S.school.name)}</h2><div>${esc(S.school.address)} · Session ${esc(S.school.session)}</div><h3 style="margin:6px 0 2px">${t}</h3>${sub?`<div>${sub}</div>`:''}</div><div style="width:70px"></div></div>`;}
+function pHead(t,sub){return `<div class="ph" style="display:flex;align-items:center;justify-content:center;gap:14px;text-align:center;margin-bottom:8px"><img src="${$('logoImg').src}" style="width:70px;height:70px"><div><h2 style="margin:0">${esc(S.school.name)}</h2><div>${esc(S.school.address)} · Session ${esc(S.school.session)} · ${seasonTag().replace(/^\S+ /,'')}</div><h3 style="margin:6px 0 2px">${t}</h3>${sub?`<div>${sub}</div>`:''}</div><div style="width:70px"></div></div>`;}
 const sig=()=>`<div class="sig"><span>Time Table In-charge</span><span>${esc(S.school.principal||'Principal')}</span></div>`;
 function doPrint(html){$('printArea').innerHTML=html;try{window.print();}catch(e){}setTimeout(()=>toast('If the print window did not open, open this app file directly in Chrome and print from there.'),900);}
 function printClass(all){const ids=all?S.classes.map(c=>c.id):[TV.mode==='class'&&TV.id?TV.id:S.classes[0].id];
@@ -1373,7 +1399,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 async function installApp(){if(!deferredInstall)return;deferredInstall.prompt();try{await deferredInstall.userChoice;}catch(e){}deferredInstall=null;$('installBtn').style.display='none';}
 try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)&&!/claude|usercontent/.test(location.hostname))navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
 function fillPC(){fillSel($('pcC'),S.classes.map(c=>[c.id,c.name]),$('pcC').value);fillSel($('pcT'),S.teachers.map(t=>[t.id,t.name]),$('pcT').value);fillSel($('pcR'),roomList(),$('pcR').value);}
-load();LASTJ=JSON.stringify(S);applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
+load();autoSeason();LASTJ=JSON.stringify(S);applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
 </script>
 </body>
 </html>
