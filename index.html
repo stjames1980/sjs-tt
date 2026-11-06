@@ -185,6 +185,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
  <div><h1 id="hName">ST. JAMES H.S. SCHOOL</h1><small id="hSub">Time Table Software · 2026-2027</small></div>
  <div class="sp"></div>
  <button class="hbtn" id="installBtn" style="display:none" onclick="installApp()">📲 Install</button>
+ <button class="hbtn" id="undoTop" style="display:none" onclick="undoLast()">↶ Undo</button>
  <button class="hbtn" id="adminBtn" onclick="adminToggle()">🔒 Admin</button>
 </header>
 <div class="wrap">
@@ -400,9 +401,10 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
   <p class="muted">Opens in Excel / Google Sheets: all class routines, all teacher routines and the master routine.</p>
   <div class="row"><button class="btn green" onclick="exportXls()">📗 Export Excel (.xls)</button></div>
  </div>
- <div class="card"><h3>🎨 Appearance</h3><div class="row"><label>Theme<select id="themeSel" onchange="S.theme=this.value;save();applyTheme()"><option value="green">Green (clean)</option><option value="navy">Navy &amp; gold</option><option value="purple">Purple</option></select></label></div></div>
+ <div class="card"><h3>🎨 Appearance</h3><div class="row"><label>Theme<select id="themeSel" onchange="S.theme=this.value;save();applyTheme()"><option value="green">Green (clean)</option><option value="navy">Navy &amp; gold</option><option value="purple">Purple</option></select></label><label>Time format<select id="hSel" onchange="S.settings.h24=this.value==='24';save();toast('Time format changed')"><option value="12">12-hour (1:05 PM)</option><option value="24">24-hour (13:05)</option></select></label></div></div>
  <div class="card"><h3>Security &amp; reset</h3>
   <div class="row"><label>New Admin PIN<input type="password" id="newPin" style="width:140px"></label><button class="btn" onclick="changePin()">Change PIN</button></div>
+  <div class="row"><button class="btn sec" onclick="undoLast()">↶ Undo last change</button></div>
   <div class="row"><button class="btn red" onclick="resetSample()">Reset to sample data</button><button class="btn red" onclick="resetBlank()">Start blank</button></div>
  </div>
 </section>
@@ -659,7 +661,13 @@ function fix(){S.adjust=S.adjust||{};S.rooms=S.rooms||[];S.theme=S.theme||'green
   S.teachers.forEach(t=>{t.unavail=t.unavail||[];});
   for(const k in S.shifts){const s=S.shifts[k];if(!s.breaks){s.breaks=s.breakAfter?[{after:+s.breakAfter,label:s.breakLabel||'Break'}]:[];delete s.breakAfter;delete s.breakLabel;delete s.breakTime;}}
   if(S.settings.autoAdj===undefined)S.settings.autoAdj=true;}
-function save(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
+let UNDO=[],LASTJ=null;
+function save(){const now=JSON.stringify(S);if(LASTJ&&now!==LASTJ){UNDO.push(LASTJ);if(UNDO.length>40)UNDO.shift();}LASTJ=now;try{localStorage.setItem(LS,now);}catch(e){}updUndo();}
+function updUndo(){const b=$('undoTop');if(b){b.style.display=isAdmin?'inline-block':'none';b.disabled=!UNDO.length;b.style.opacity=UNDO.length?1:.45;}}
+function undoLast(){if(!needAdmin())return;if(!UNDO.length){toast('Nothing to undo');return;}const j=UNDO.pop();S=JSON.parse(j);fix();LASTJ=JSON.stringify(S);try{localStorage.setItem(LS,LASTJ);}catch(e){}refreshHeader();render(curView);updUndo();toast('↶ Undone ('+UNDO.length+' more step'+(UNDO.length===1?'':'s')+' available)');}
+function resetShift(sh){if(!needAdmin())return;const def=sampleState().shifts[sh];if(!def){toast('No default for this shift');return;}
+  ask('Reset '+esc(S.shifts[sh].name)+' periods, timings and breaks to the default?',()=>{S.shifts[sh]=JSON.parse(JSON.stringify(def));const n=def.periods.length;S.classes.filter(c=>c.shift===sh).forEach(c=>{for(const k in S.tt[c.id]||{})if(+k.split('|')[1]>=n)delete S.tt[c.id][k];});save();render(curView);toast('↺ Default timings restored');});}
+function resetDays(){S.days=[0,1,2,3,4];for(const c in S.tt)for(const k in S.tt[c])if(+k.split('|')[0]>4)delete S.tt[c][k];save();render(curView);toast('↺ Monday–Friday restored');}
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2300);}
 function modal(h){$('mbox').innerHTML=h;$('modal').classList.add('show');}
 function closeModal(){$('modal').classList.remove('show');}
@@ -670,8 +678,10 @@ const subj=code=>S.subjects.find(s=>s.code===code)||{code,name:code,color:'#888'
 const tint=(hex,a)=>{const h=hex.replace('#','');const n=parseInt(h.length===3?h.split('').map(x=>x+x).join(''):h,16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;};
 const shifts=()=>Object.keys(S.shifts);
 function brkOf(sh,i){const s=S.shifts[sh];if(!s||i>=s.periods.length-1)return null;return (s.breaks||[]).find(b=>+b.after===i+1)||null;}
-function brkTime(sh,b){const p=S.shifts[sh].periods;return p[b.after-1]&&p[b.after]?p[b.after-1][1]+'–'+p[b.after][0]:'';}
-const ptime=(sh,p)=>{const x=S.shifts[sh].periods[p];return x?x[0]+'–'+x[1]:'';};
+function brkTime(sh,b){const p=S.shifts[sh].periods;return p[b.after-1]&&p[b.after]?trange(p[b.after-1][1],p[b.after][0]):'';}
+function t12(t){if(!t)return '';if(S&&S.settings&&S.settings.h24)return t;const [H,M]=String(t).split(':').map(Number);if(isNaN(H))return t;return ((H%12)||12)+':'+String(M||0).padStart(2,'0')+' '+(H<12?'AM':'PM');}
+const trange=(a,b)=>t12(a)+' – '+t12(b);
+const ptime=(sh,p)=>{const x=S.shifts[sh].periods[p];return x?trange(x[0],x[1]):'';};
 const fmtDate=d=>{const [y,m,dd]=d.split('-');return dd+'-'+m+'-'+y;};
 const todayStr=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const dayIdx=ds=>{const d=new Date(ds+'T00:00:00').getDay();return d===0?-1:d-1;};
@@ -687,7 +697,7 @@ function go(v){if(v==='class'||v==='teacher'||v==='rooms'){TV.mode=v==='rooms'?'
 function toggleNav(){$('nav').classList.toggle('open');}
 document.querySelectorAll('nav a[data-v],#bnav a[data-v]').forEach(a=>a.onclick=()=>{if(a.dataset.tab)setupTab=a.dataset.tab;go(a.dataset.v);});
 window.addEventListener('hashchange',()=>go(location.hash.slice(1)));
-function render(v){({home:renderHome,class:renderClass,teacher:renderTeacher,master:renderMaster,free:renderFree,adjust:renderAdjustView,generate:renderGenerate,create:renderCreate,timetable:renderTT,workload:renderWorkload,print:fillPC,setup:renderSetup,reports:renderReports,backup:()=>{$('themeSel').value=S.theme||'green';},help:()=>{}}[v]||(()=>{}))();}
+function render(v){({home:renderHome,class:renderClass,teacher:renderTeacher,master:renderMaster,free:renderFree,adjust:renderAdjustView,generate:renderGenerate,create:renderCreate,timetable:renderTT,workload:renderWorkload,print:fillPC,setup:renderSetup,reports:renderReports,backup:()=>{$('themeSel').value=S.theme||'green';$('hSel').value=S.settings.h24?'24':'12';},help:()=>{}}[v]||(()=>{}))();}
 function refreshHeader(){$('hName').textContent=S.school.name;$('hSub').textContent='Time Table Software · '+S.school.session;document.title=S.school.name+' – Time Table '+S.school.session;}
 
 /* ---- admin ---- */
@@ -697,11 +707,11 @@ function adminToggle(){
   const f=()=>{if($('pinIn').value===String(S.settings.pin)){isAdmin=true;closeModal();setAdm();toast('✅ Admin mode on');}else $('pinErr').textContent='Wrong PIN';};
   $('pinGo').onclick=f;$('pinIn').onkeydown=e=>{if(e.key==='Enter')f();};setTimeout(()=>$('pinIn').focus(),50);
 }
-function setAdm(){$('adminBtn').classList.toggle('on',isAdmin);$('adminBtn').textContent=isAdmin?'🔓 Admin ON':'🔒 Admin';document.body.classList.toggle('adm',isAdmin);render(curView);}
+function setAdm(){setTimeout(updUndo,0);$('adminBtn').classList.toggle('on',isAdmin);$('adminBtn').textContent=isAdmin?'🔓 Admin ON':'🔒 Admin';document.body.classList.toggle('adm',isAdmin);render(curView);}
 
 /* ---- grids ---- */
 function headRow(sh,first){const s=S.shifts[sh];let h=`<tr><th class="day">${first||'Day'}</th>`;
-  s.periods.forEach((p,i)=>{h+=`<th>P${i+1}<span class="tm">${p[0]}–${p[1]}</span></th>`;if(brkOf(sh,i))h+=`<th class="brkh" style="width:22px"></th>`;});return h+'</tr>';}
+  s.periods.forEach((p,i)=>{h+=`<th>P${i+1}<span class="tm">${trange(p[0],p[1])}</span></th>`;if(brkOf(sh,i))h+=`<th class="brkh" style="width:22px"></th>`;});return h+'</tr>';}
 function cellHtml(a,teacherSide,extra,clash){
   if(!a)return `<div class="cell empty">—</div>`;
   const s=subj(a.subject),t=T()[a.teacherId];
@@ -865,7 +875,7 @@ function renderMaster(){daySel($('mDay'));shiftSel($('mShift'));$('mGrid').inner
 /* ---- free ---- */
 function renderFree(){daySel($('fDay'));shiftSel($('fShift'));const d=+$('fDay').value,sh=$('fShift').value,s=S.shifts[sh];
   let h=`<table class="list"><tr><th>Period</th><th>Time</th><th>Free teachers</th><th>No.</th></tr>`;
-  s.periods.forEach((p,i)=>{const f=freeTeachers(S,sh,d,i);h+=`<tr><td><b>P${i+1}</b></td><td>${p[0]}–${p[1]}</td><td>${f.map(t=>`<span class="pill g" style="margin:2px">${esc(t.abbr)}</span>`).join(' ')||'<span class="muted">none</span>'}</td><td>${f.length}</td></tr>`;});
+  s.periods.forEach((p,i)=>{const f=freeTeachers(S,sh,d,i);h+=`<tr><td><b>P${i+1}</b></td><td>${trange(p[0],p[1])}</td><td>${f.map(t=>`<span class="pill g" style="margin:2px">${esc(t.abbr)}</span>`).join(' ')||'<span class="muted">none</span>'}</td><td>${f.length}</td></tr>`;});
   $('fGrid').innerHTML=h+'</table>';}
 
 /* ---- rooms ---- */
@@ -940,7 +950,7 @@ function ttTable(mode,id,print){
     if(!any)return;
     let h=(mode!=='class'?`<h3 style="margin:6px 0 4px;color:var(--navy);font-size:14px">${esc(s.name)}</h3>`:'')+`<div class="tw" style="border:0"><table class="ttg ${days.length>1?'wk':''}"><tr><th style="text-align:left">Time / Day</th>${days.map(d=>`<th>${DAY_NAMES[d]}${print?'':`<span class="tm" style="display:block">${fmtShort(wk[d])}</span>`}</th>`).join('')}</tr>`;
     s.periods.forEach((per,p)=>{
-      h+=`<tr><td class="tper"><b>${p+1}</b><span>${per[0]} – ${per[1]}</span></td>`;
+      h+=`<tr><td class="tper"><b>${p+1}</b><span>${t12(per[0])} –<br>${t12(per[1])}</span></td>`;
       days.forEach(d=>{const items=ttItems(mode,id,sh,d,p,idx,ri);const adj=print?null:S.adjust[wk[d]];let inner='';
         items.forEach(it=>{const sb=subj(it.a.subject),t=TM[it.a.teacherId]||{};
           const clash=(idx[it.a.teacherId+'|'+sh+'|'+d+'|'+p]||[]).length>1;
@@ -1106,7 +1116,7 @@ function waMessage(){
   let m=`*${S.school.name}*\n*PERIOD ADJUSTMENT*\n📅 ${d>=0?DAY_NAMES[d]:''}, ${fmtDate(ds)}\n\n❌ Absent: ${ADJ.absent.map(t=>(TM[t]||{}).name||t).join(', ')}\n`;
   let lastSh='';
   adjRows().forEach(r=>{if(r.sh!==lastSh){m+=`\n*${S.shifts[r.sh].name}*\n`;lastSh=r.sh;}
-    const s=ADJ.subs[r.key];m+=`P${r.p+1} (${S.shifts[r.sh].periods[r.p][0]}) | ${r.c.name} | ${r.a.subject} | ${TM[r.a.teacherId].abbr} ➜ *${s?(TM[s]||{}).name:'—'}*\n`;});
+    const s=ADJ.subs[r.key];m+=`P${r.p+1} (${t12(S.shifts[r.sh].periods[r.p][0])}) | ${r.c.name} | ${r.a.subject} | ${TM[r.a.teacherId].abbr} ➜ *${s?(TM[s]||{}).name:'—'}*\n`;});
   return m+`\n_Kindly take the adjusted periods. Thank you._`;
 }
 function saveAdjust(quiet){if(!needAdmin())return;if(!ADJ.date)return;if(!ADJ.absent.length){delete S.adjust[ADJ.date];}else S.adjust[ADJ.date]={absent:ADJ.absent.slice(),subs:Object.assign({},ADJ.subs),manual:Object.assign({},ADJ.manual||{})};save();drawAdjust();if(!quiet)toast('💾 Adjustment saved for '+fmtDate(ADJ.date));}
@@ -1150,13 +1160,13 @@ function renderSetup(){
   if(setupTab==='school'){h+=`<div class="card"><div class="row" style="flex-direction:column;align-items:stretch">
     ${[['name','School name'],['address','Address'],['session','Session'],['principal','Principal name (for print)']].map(f=>`<label>${f[1]}<input type="text" ${dis} value="${esc(S.school[f[0]]||'')}" onchange="S.school['${f[0]}']=this.value;save();refreshHeader()"></label>`).join('')}</div></div>`;}
   if(setupTab==='periods'){
-    h+=`<div class="card"><h3>Working days</h3><div class="row">${DAY_NAMES.map((n,i)=>`<label style="flex-direction:row;gap:5px;color:var(--ink)"><input type="checkbox" ${dis} ${S.days.includes(i)?'checked':''} onchange="toggleDay(${i},this.checked)"> ${n}</label>`).join('')}</div></div>`;
+    h+=`<div class="card"><h3>Working days ${isAdmin?'<button class="btn sm sec" onclick="resetDays()" style="float:right">↺ Mon–Fri default</button>':''}</h3><div class="row">${DAY_NAMES.map((n,i)=>`<label style="flex-direction:row;gap:5px;color:var(--ink)"><input type="checkbox" ${dis} ${S.days.includes(i)?'checked':''} onchange="toggleDay(${i},this.checked)"> ${n}</label>`).join('')}</div></div>`;
     shifts().forEach(sh=>{const s=S.shifts[sh];
       h+=`<div class="card"><h3>${esc(s.name)}</h3><div class="row"><label>Shift name<input type="text" ${dis} value="${esc(s.name)}" onchange="S.shifts['${sh}'].name=this.value;save()"></label>
 </div>
       <p style="margin:4px 0 6px"><b>Breaks</b> <span class="muted">(break time = gap between the period timings below)</span></p>
       <div class="tw" style="margin-bottom:10px"><table class="list"><tr><th>Break name</th><th>After period</th><th>Time</th><th></th></tr>${(s.breaks||[]).map((b,j)=>`<tr><td><input type="text" ${dis} value="${esc(b.label)}" onchange="S.shifts['${sh}'].breaks[${j}].label=this.value;save()"></td><td><input type="number" ${dis} min="1" max="${s.periods.length-1}" style="width:70px" value="${b.after}" onchange="S.shifts['${sh}'].breaks[${j}].after=+this.value;save();renderSetup()"></td><td>${brkTime(sh,b)||'—'}</td><td>${isAdmin?`<button class="btn sm red" onclick="S.shifts['${sh}'].breaks.splice(${j},1);save();renderSetup()">✕</button>`:''}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">No break</td></tr>'}</table></div>
-      ${isAdmin?`<div class="row"><button class="btn sm sec" onclick="addBreak('${sh}')">+ Add break</button><button class="btn sm gold" onclick="timingDlg('${sh}')">⏱️ Auto timing (start, period length, break length)</button></div>`:''}
+      ${isAdmin?`<div class="row"><button class="btn sm sec" onclick="addBreak('${sh}')">+ Add break</button><button class="btn sm gold" onclick="timingDlg('${sh}')">⏱️ Auto timing (start, period length, break length)</button><button class="btn sm red" onclick="resetShift('${sh}')">↺ Reset this shift to default</button></div>`:''}
       <div class="tw"><table class="list"><tr><th>Period</th><th>Start</th><th>End</th></tr>${s.periods.map((p,i)=>`<tr><td>P${i+1}</td><td><input type="time" ${dis} value="${p[0]}" onchange="S.shifts['${sh}'].periods[${i}][0]=this.value;save()"></td><td><input type="time" ${dis} value="${p[1]}" onchange="S.shifts['${sh}'].periods[${i}][1]=this.value;save()"></td></tr>`).join('')}</table></div>
       ${isAdmin?`<div class="row" style="margin-top:8px"><button class="btn sm" onclick="addPeriod('${sh}')">+ Add period</button><button class="btn sm red" onclick="delPeriod('${sh}')">− Remove last period</button></div>`:''}</div>`;});
   }
@@ -1238,7 +1248,7 @@ function renderCreate(){
   h+=`<div class="note">Your data is already loaded? Skip to the step you need. Starting your own school from zero? <button class="btn sm red" onclick="wzFresh()">🧹 Remove sample classes &amp; teachers</button></div>`;
   // step 1
   let b1=`<div class="row">${DAY_NAMES.map((n,i)=>`<label style="flex-direction:row;gap:5px;color:var(--ink)"><input type="checkbox" ${S.days.includes(i)?'checked':''} onchange="toggleDay(${i},this.checked);renderCreate()"> ${n.slice(0,3)}</label>`).join('')}</div>`;
-  shifts().forEach(sh=>{const s=S.shifts[sh];b1+=`<p style="margin:6px 0"><b>${esc(s.name)}</b>: ${s.periods.length} periods, ${s.periods[0]?s.periods[0][0]:''}–${s.periods.length?s.periods[s.periods.length-1][1]:''}; ${(s.breaks||[]).map(b=>esc(b.label)+' after P'+b.after+' ('+brkTime(sh,b)+')').join(', ')||'no break'} <button class="btn sm gold" onclick="timingDlg('${sh}')">⏱️ Change timing</button></p>`;});
+  shifts().forEach(sh=>{const s=S.shifts[sh];b1+=`<p style="margin:6px 0"><b>${esc(s.name)}</b>: ${s.periods.length} periods, ${s.periods[0]?t12(s.periods[0][0]):''} – ${s.periods.length?t12(s.periods[s.periods.length-1][1]):''}; ${(s.breaks||[]).map(b=>esc(b.label)+' after P'+b.after+' ('+brkTime(sh,b)+')').join(', ')||'no break'} <button class="btn sm gold" onclick="timingDlg('${sh}')">⏱️ Change timing</button></p>`;});
   b1+=`<p class="muted" style="margin:4px 0 0">To rename or add breaks: <a href="#setup" onclick="setupTab='periods'">Setup → Days &amp; Periods</a>.</p>`;
   h+=wzCard(1,'Days &amp; periods',S.days.length>0,b1);
   // step 2
@@ -1363,7 +1373,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredIns
 async function installApp(){if(!deferredInstall)return;deferredInstall.prompt();try{await deferredInstall.userChoice;}catch(e){}deferredInstall=null;$('installBtn').style.display='none';}
 try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)&&!/claude|usercontent/.test(location.hostname))navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
 function fillPC(){fillSel($('pcC'),S.classes.map(c=>[c.id,c.name]),$('pcC').value);fillSel($('pcT'),S.teachers.map(t=>[t.id,t.name]),$('pcT').value);fillSel($('pcR'),roomList(),$('pcR').value);}
-load();applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
+load();LASTJ=JSON.stringify(S);applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
 </script>
 </body>
 </html>
