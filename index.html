@@ -1373,7 +1373,8 @@ function renderCreate(){
   shifts().forEach(sh=>{const cs=S.classes.filter(c=>c.shift===sh);b2+=`<p style="margin:10px 0 4px"><b>${esc(S.shifts[sh].name)}</b> (${cs.length})</p><div class="chips">${cs.map(c=>`<span class="chip">${esc(c.name)} <b style="color:var(--red);cursor:pointer" onclick="delClass('${c.id}')">✕</b></span>`).join('')||'<span class="muted">none yet</span>'}</div>`;});
   h+=wzCard(2,'Classes &amp; sections',S.classes.length>0,b2);
   // step 3
-  let b3=`<p class="muted" style="margin:0 0 4px">Type one teacher per line. Short name after a comma is optional (e.g. <i>Lalramenga, LRM</i>).</p><textarea id="wzT" style="min-height:90px;font-family:inherit;font-size:14px" placeholder="Teacher name, ABBR"></textarea>
+  let b3=`<p class="muted" style="margin:0 0 4px">Type one teacher per line, or <b>copy from Excel and paste here</b> (columns: Name, Short name, Shift, Phone – only Name is needed; a Sl. No. column and a heading row are skipped). Example: <i>Lalramenga Molsom, LR, Noon</i>.</p><textarea id="wzT" style="min-height:90px;font-family:inherit;font-size:14px" placeholder="Teacher name, ABBR, Morning/Noon/Both
+(or paste columns from Excel)"></textarea>
   <div class="row" style="margin-top:8px"><label>These teachers teach in<select onchange="WZ.tshift=this.value">${[['','Decide automatically'],['M','Morning shift'],['N','Noon shift'],['both','Both shifts']].map(([k,l])=>`<option value="${k}" ${WZ.tshift===k?'selected':''}>${l}</option>`).join('')}</select></label><button class="btn" onclick="wzAddTeachers()">+ Add teachers</button></div>
   ${(()=>{const g=groupBy('t',S.teachers);return ['M','N','both',''].map(k=>g[k].length?`<p style="margin:8px 0 4px"><b>${SHN[k]}</b> (${g[k].length})</p><div class="chips">${g[k].map(t=>`<span class="chip">${esc(t.name)} · ${esc(t.abbr)} <span class="muted">${L[t.id]||0}</span> <b style="color:var(--red);cursor:pointer" onclick="delTeacher('${t.id}')">✕</b></span>`).join('')}</div>`:'').join('')||'<span class="muted">none yet</span>';})()}`;
   h+=wzCard(3,'Teachers',S.teachers.length>0,b3);
@@ -1407,12 +1408,18 @@ function wzAddClasses(){if(!WZ.cls.size){toast('Tap at least one class');return;
   CLASS_LIST.filter(k=>WZ.cls.has(k)).forEach(k=>(secs.length?secs:['']).forEach(s=>{const name=s?k+'-'+s:k;if(S.classes.some(c=>c.name===name))return;const id=newClassId();S.classes.push({id,name,shift:WZ.shift,ct:''});S.tt[id]={};n++;}));
   WZ.cls.clear();save();renderCreate();toast(n+' class(es) added');}
 function wzAddOne(){const v=$('wzOne').value.trim();if(!v)return;if(S.classes.some(c=>c.name===v)){toast('Already exists');return;}const id=newClassId();S.classes.push({id,name:v,shift:WZ.shift,ct:''});S.tt[id]={};save();renderCreate();}
-function wzAddTeachers(){const lines=$('wzT').value.split('\n').map(x=>x.trim()).filter(Boolean);let n=0;
-  lines.forEach(l=>{let [name,ab]=l.split(',').map(x=>(x||'').trim());if(!name||S.teachers.some(t=>t.name.toLowerCase()===name.toLowerCase()))return;
-    if(!ab)ab=name.replace(/^(sir|mr|mrs|ms|miss|madam|dr)\.?\s+/i,'').split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,4);
-    if(ab.length<2)ab=name.replace(/\s+/g,'').slice(0,3).toUpperCase();let base=ab,i=2;while(S.teachers.some(t=>t.abbr===ab))ab=base+(i++);
-    let k=S.teachers.length+1;while(S.teachers.some(t=>t.id==='t'+k))k++;S.teachers.push({id:'t'+k,name,abbr:ab,phone:'',maxDay:6,unavail:[],shift:WZ.tshift||''});n++;});
-  save();renderCreate();toast(n+' teacher(s) added');}
+function wzAddTeachers(){const lines=$('wzT').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);let n=0,dup=0,upd=0;
+  lines.forEach(l=>{let cols=(l.includes('\t')?l.split('\t'):l.split(',')).map(x=>(x||'').trim()).filter(x=>x!=='');
+    if(cols.some(c=>/^(name|teacher'?s? ?name|name of (the )?teachers?|sl\.? ?no\.?|s\.? ?no\.?|abbr\.?|short( name)?|shift|phone)$/i.test(c)))return;
+    if(cols.length&&/^\d+\.?$/.test(cols[0]))cols.shift();
+    let sh='',ph='';cols=cols.filter(c=>{const s=c.toLowerCase();if(/^(morning|morn|m)$/.test(s)||/^morning\s*shift$/.test(s)){sh='M';return false;}if(/^(noon|n|afternoon)$/.test(s)||/^noon\s*shift$/.test(s)){sh='N';return false;}if(/^(both|both shifts|m\s*&\s*n)$/.test(s)){sh='both';return false;}if(/^\+?\d[\d\s-]{7,}$/.test(c)){ph=c;return false;}return true;});
+    let [name,ab]=cols;if(!name||/^(name|teacher|teachers|teacher name|sl|s\.?no)$/i.test(name))return;
+    const ex=S.teachers.find(t=>t.name.toLowerCase()===name.toLowerCase());
+    if(ex){if(sh||ph||ab){if(sh)ex.shift=sh;if(ph)ex.phone=ph;if(ab&&!S.teachers.some(t=>t!==ex&&t.abbr===ab))ex.abbr=ab;upd++;}else dup++;return;}
+    if(!ab)ab=name.replace(/^(sir|mr|mrs|ms|miss|madam|dr|pu|pi)\.?\s+/i,'').split(/[\s.]+/).filter(Boolean).map(w=>w[0]).join('').toUpperCase().slice(0,4);
+    if(ab.length<2)ab=name.replace(/[\s.]+/g,'').slice(0,3).toUpperCase();let base=ab,i=2;while(S.teachers.some(t=>t.abbr===ab))ab=base+(i++);
+    let k=S.teachers.length+1;while(S.teachers.some(t=>t.id==='t'+k))k++;S.teachers.push({id:'t'+k,name,abbr:ab,phone:ph,maxDay:6,unavail:[],shift:sh||WZ.tshift||''});n++;});
+  $('wzT').value='';save();renderCreate();toast(`${n} teacher(s) added`+(upd?`, ${upd} updated`:'')+(dup?`, ${dup} already in the list`:''));}
 function wzAddSubj(){const v=$('wzSub').value.trim();if(!v)return;let code=v.replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase()||'SUB',base=code,i=2;while(S.subjects.some(s=>s.code===code))code=base+(i++);
   S.subjects.push({code,name:v,color:'#'+Math.floor(Math.random()*0xaaaaaa).toString(16).padStart(6,'0'),type:'lecture',shift:''});WZ.sub=code;save();renderCreate();}
 function wzAddAlloc(){if(!WZ.tid||!WZ.sub){toast('Choose teacher and subject');return;}if(!WZ.t4.size){toast('Tap the classes');return;}
