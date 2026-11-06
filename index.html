@@ -527,7 +527,7 @@ function roomOf(S,cid,a){return (a&&a.room)||(S.classes.find(c=>c.id===cid)||{})
 function roomName(S,rid){if(String(rid).startsWith('cls:')){const c=S.classes.find(x=>x.id===rid.slice(4));return c?c.name+' (class room)':'?';}const r=(S.rooms||[]).find(x=>x.id===rid);return r?r.name:rid;}
 function roomIndex(S){const A=allocMap(S),C=classMap(S),idx={};
   for(const cid in S.tt){const c=C[cid];if(!c)continue;for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(!a)continue;const key=roomOf(S,cid,a)+'|'+c.shift+'|'+k;(idx[key]=idx[key]||[]).push(cid);}}return idx;}
-function roomClashes(S){const idx=roomIndex(S),out=[];for(const key in idx)if(idx[key].length>1){const [r,sh,d,p]=key.split('|');out.push({room:r,name:roomName(S,r),shift:sh,d:+d,p:+p,classes:idx[key]});}return out;}
+function roomClashes(S){const idx=roomIndex(S),A=allocMap(S),out=[];for(const key in idx){const k4=key.split('|').slice(2).join('|');idx[key]=idx[key].filter(cid=>{const c=(S.tt[cid]||{})[k4];return !(c&&A[c.a]&&A[c.a].fixed);});}for(const key in idx)if(idx[key].length>1){const [r,sh,d,p]=key.split('|');out.push({room:r,name:roomName(S,r),shift:sh,d:+d,p:+p,classes:idx[key]});}return out;}
 function clashes(S){
   const idx=busyIndex(S),T=teacherMap(S),out=[];
   for(const key in idx)if(idx[key].length>1){const [tid,sh,d,p]=key.split('|');
@@ -668,7 +668,7 @@ function applyFixed(S){
       const tid=r.by==='none'?'':r.by==='ct'?(c.ct||''):r.by;
       let a=S.alloc.find(x=>x.fixed===r.id&&x.classId===c.id);
       if(!a){a={id:uid(),classId:c.id,subject:r.code,teacherId:tid,ppw:0,fixed:r.id};S.alloc.push(a);}
-      a.subject=r.code;a.teacherId=tid;a.ppw=slots.length;keep.add(a.id);
+      a.subject=r.code;a.teacherId=tid;a.ppw=slots.length;a.room=r.room||'';keep.add(a.id);
       const tt=S.tt[c.id]=S.tt[c.id]||{};
       for(const k in tt)if(tt[k].a===a.id&&!slots.includes(k))delete tt[k];
       slots.forEach(k=>{if(tt[k]&&tt[k].a!==a.id)displaced++;tt[k]={a:a.id,l:1,fx:1};});
@@ -1274,6 +1274,7 @@ function renderSetup(){
        <label>Name<input type="text" ${dis} value="${esc(r.label)}" onchange="S.fixed[${i}].label=this.value;fxSave()"></label>
        <label>Shift<select ${dis} onchange="S.fixed[${i}].shift=this.value;fxSave()"><option value="all" ${r.shift==='all'?'selected':''}>Both shifts</option>${shifts().map(s=>`<option value="${s}" ${r.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></label>
        <label>Taken by<select ${dis} onchange="S.fixed[${i}].by=this.value;fxSave()"><option value="none" ${r.by==='none'?'selected':''}>No teacher (whole school)</option><option value="ct" ${r.by==='ct'?'selected':''}>Class teacher of each class</option>${S.teachers.map(t=>`<option value="${t.id}" ${r.by===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label>
+       <label>Room / place<select ${dis} onchange="S.fixed[${i}].room=this.value;fxSave()">${roomOpts(r.room||'','Own class room')}</select></label>
        ${isAdmin?`<button class="btn sm red" onclick="delFixed(${i})">✕ Remove</button>`:''}</div>
        <p class="muted" style="margin:4px 0">Periods (tap one or more):</p><div class="chips">${Array.from({length:maxP},(_,p)=>{const on=(r.periods||[r.period]).includes(p);return `<span class="chip ${on?'on':''}" style="${on?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxPer(${i},${p})"`:''}>Period ${p+1}</span>`;}).join('')}</div>
        <p class="muted" style="margin:8px 0 4px">Days:</p><div class="chips">${DAY_NAMES.map((n,d)=>S.days.includes(d)?`<span class="chip ${r.days.includes(d)?'on':''}" style="${r.days.includes(d)?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxDay(${i},${d})"`:''}>${n}</span>`:'').join('')}</div>
