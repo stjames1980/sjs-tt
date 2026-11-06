@@ -659,7 +659,8 @@ function applyFixed(S){
     sb.name=r.label||'Devotion';sb.fixed=1;sb.type='activity';
     S.classes.filter(c=>(r.shift==='all'||c.shift===r.shift)&&(r.classIds==='all'||(r.classIds||[]).includes(c.id))).forEach(c=>{
       const np=(S.shifts[c.shift]||{periods:[]}).periods.length;
-      const slots=(r.days||[]).filter(d=>S.days.includes(d)&&r.period<np).map(d=>d+'|'+r.period);
+      if(!Array.isArray(r.periods))r.periods=[+r.period||0];
+      const slots=[];(r.days||[]).filter(d=>S.days.includes(d)).forEach(d=>r.periods.forEach(p=>{if(p<np)slots.push(d+'|'+p);}));
       const tid=r.by==='none'?'':r.by==='ct'?(c.ct||''):r.by;
       let a=S.alloc.find(x=>x.fixed===r.id&&x.classId===c.id);
       if(!a){a={id:uid(),classId:c.id,subject:r.code,teacherId:tid,ppw:0,fixed:r.id};S.alloc.push(a);}
@@ -1255,18 +1256,18 @@ function renderSetup(){
   }
   if(setupTab==='fixed'){
     const res=applyFixed(S);
-    h+=`<div class="card"><h3>⭐ Devotion &amp; Fixed Periods</h3><p class="muted" style="margin-top:0">Reserve a period on chosen days (for example <b>Devotion – Monday, Period 1</b>). Auto Generate never puts a subject there. Choose who takes it: no teacher (whole school together), each class teacher, or one chosen teacher like a normal subject.</p>
-    ${isAdmin?`<div class="row"><button class="btn gold" onclick="addFixed(true)">+ Add Devotion (Monday, Period 1)</button><button class="btn sec" onclick="addFixed(false)">+ Add another fixed period (Assembly, Library…)</button></div>`:''}</div>`;
+    h+=`<div class="card"><h3>⭐ Devotion &amp; Fixed Periods</h3><p class="muted" style="margin-top:0">Reserve periods on chosen days (for example <b>Devotion – Monday, Period 1</b> or <b>Games &amp; CCA – Wednesday, Periods 5–7</b>). Auto Generate never puts a subject there. Choose who takes it: no teacher (whole school together), each class teacher, or one chosen teacher like a normal subject.</p>
+    ${isAdmin?`<div class="row"><button class="btn gold" onclick="addFixed(true)">+ Add Devotion (Monday, Period 1)</button><button class="btn" onclick="addGames()">+ Add Games / CCA (Wednesday last periods)</button><button class="btn sec" onclick="addFixed(false)">+ Add another fixed period</button></div>`:''}</div>`;
     if(res.over.length)h+=`<div class="note err">⚠️ These classes now have more periods than slots: <b>${res.over.map(c=>esc(c.name)).join(', ')}</b>. Reduce one period of some subject in <a href="#setup" onclick="setupTab='alloc';allocCls='${res.over[0].id}'">Allocation</a>, then run Auto Generate.</div>`;
     const maxP=Math.max(...shifts().map(sh=>nPer(S,sh)));
     S.fixed.forEach((r,i)=>{
       h+=`<div class="card" style="border-left:5px solid #ca8a04"><div class="row">
        <label>Name<input type="text" ${dis} value="${esc(r.label)}" onchange="S.fixed[${i}].label=this.value;fxSave()"></label>
-       <label>Period<select ${dis} onchange="S.fixed[${i}].period=+this.value;fxSave()">${Array.from({length:maxP},(_,p)=>`<option value="${p}" ${r.period===p?'selected':''}>Period ${p+1}</option>`).join('')}</select></label>
        <label>Shift<select ${dis} onchange="S.fixed[${i}].shift=this.value;fxSave()"><option value="all" ${r.shift==='all'?'selected':''}>Both shifts</option>${shifts().map(s=>`<option value="${s}" ${r.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></label>
        <label>Taken by<select ${dis} onchange="S.fixed[${i}].by=this.value;fxSave()"><option value="none" ${r.by==='none'?'selected':''}>No teacher (whole school)</option><option value="ct" ${r.by==='ct'?'selected':''}>Class teacher of each class</option>${S.teachers.map(t=>`<option value="${t.id}" ${r.by===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label>
        ${isAdmin?`<button class="btn sm red" onclick="delFixed(${i})">✕ Remove</button>`:''}</div>
-       <p class="muted" style="margin:4px 0">Days:</p><div class="chips">${DAY_NAMES.map((n,d)=>S.days.includes(d)?`<span class="chip ${r.days.includes(d)?'on':''}" style="${r.days.includes(d)?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxDay(${i},${d})"`:''}>${n}</span>`:'').join('')}</div>
+       <p class="muted" style="margin:4px 0">Periods (tap one or more):</p><div class="chips">${Array.from({length:maxP},(_,p)=>{const on=(r.periods||[r.period]).includes(p);return `<span class="chip ${on?'on':''}" style="${on?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxPer(${i},${p})"`:''}>Period ${p+1}</span>`;}).join('')}</div>
+       <p class="muted" style="margin:8px 0 4px">Days:</p><div class="chips">${DAY_NAMES.map((n,d)=>S.days.includes(d)?`<span class="chip ${r.days.includes(d)?'on':''}" style="${r.days.includes(d)?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxDay(${i},${d})"`:''}>${n}</span>`:'').join('')}</div>
        <p class="muted" style="margin:8px 0 4px">Classes: <select ${dis} onchange="S.fixed[${i}].classIds=this.value==='all'?'all':S.classes.filter(c=>S.fixed[${i}].shift==='all'||c.shift===S.fixed[${i}].shift).map(c=>c.id);fxSave()"><option value="all" ${r.classIds==='all'?'selected':''}>All classes</option><option value="some" ${r.classIds!=='all'?'selected':''}>Only selected classes</option></select></p>
        ${r.classIds!=='all'?`<div class="chips">${S.classes.filter(c=>r.shift==='all'||c.shift===r.shift).map(c=>`<span class="chip ${r.classIds.includes(c.id)?'on':''}" style="${r.classIds.includes(c.id)?'background:#ca8a04;border-color:#ca8a04':''}" ${isAdmin?`onclick="fxCls(${i},'${c.id}')"`:''}>${esc(c.name)}</span>`).join('')}</div>`:''}
       </div>`;});
@@ -1278,8 +1279,14 @@ function renderSetup(){
   $('setupBody').innerHTML=h;
 }
 function fxSave(){const r=applyFixed(S);save();renderSetup();toast(r.displaced?`⭐ Saved. ${r.displaced} lesson(s) moved out – run Auto Generate to place them again.`:'⭐ Saved');}
-function addFixed(dev){if(!needAdmin())return;let n=1;while(S.fixed.some(f=>f.id==='fx'+n))n++;S.fixed.push({id:'fx'+n,label:dev?'Devotion':'Assembly',days:dev?[0]:[S.days[0]],period:0,shift:'all',classIds:'all',by:'none'});fxSave();}
+function nextFx(){let n=1;while(S.fixed.some(f=>f.id==='fx'+n))n++;return 'fx'+n;}
+function addFixed(dev){if(!needAdmin())return;S.fixed.push({id:nextFx(),label:dev?'Devotion':'Assembly',days:dev?[0]:[S.days[0]],periods:[0],shift:'all',classIds:'all',by:'none'});fxSave();}
+function addGames(){if(!needAdmin())return;
+  shifts().forEach(sh=>{const np=nPer(S,sh);const per=sh==='M'?[3,4,5].filter(p=>p<np):[np-3,np-2,np-1].filter(p=>p>=0);
+    S.fixed.push({id:nextFx(),label:'Games & Sports / CCA',days:[2],periods:per,shift:sh,classIds:'all',by:'none'});});
+  fxSave();}
 function delFixed(i){ask('Remove “'+esc(S.fixed[i].label)+'”? Those periods become free for subjects.',()=>{S.fixed.splice(i,1);fxSave();});}
+function fxPer(i,p){const r=S.fixed[i];const ps=Array.isArray(r.periods)?r.periods:[r.period||0];r.periods=ps.includes(p)?ps.filter(x=>x!==p):[...ps,p].sort((a,b)=>a-b);fxSave();}
 function fxDay(i,d){const r=S.fixed[i];r.days=r.days.includes(d)?r.days.filter(x=>x!==d):[...r.days,d].sort();fxSave();}
 function fxCls(i,cid){const r=S.fixed[i];r.classIds=r.classIds.includes(cid)?r.classIds.filter(x=>x!==cid):[...r.classIds,cid];fxSave();}
 function roomOpts(sel,blank){return `<option value="">${blank}</option>`+S.rooms.map(r=>`<option value="${r.id}" ${r.id===sel?'selected':''}>${esc(r.name)}</option>`).join('');}
