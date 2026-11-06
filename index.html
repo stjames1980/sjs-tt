@@ -651,9 +651,10 @@ function generate(S,opt){
 
 /* fixed periods (devotion etc.) */
 function applyFixed(S){
-  S.fixed=S.fixed||[];let displaced=0;const keep=new Set(),codes=new Set();
+  S.fixed=S.fixed||[];let displaced=0;const keep=new Set(),codes=new Set(),usedCodes=new Set();
   S.fixed.forEach((r,ri)=>{
-    if(!r.code){let c='DEV',i=2;while(S.subjects.some(s=>s.code===c&&!s.fixed))c='DEV'+(i++);r.code=c;}
+    if(!r.code||usedCodes.has(r.code)||S.subjects.some(s=>s.code===r.code&&!s.fixed)){let c=String(r.id).toUpperCase(),i=2;while(usedCodes.has(c)||S.subjects.some(s=>s.code===c&&!s.fixed))c=String(r.id).toUpperCase()+'_'+(i++);r.code=c;}
+    usedCodes.add(r.code);
     codes.add(r.code);
     let sb=S.subjects.find(s=>s.code===r.code);if(!sb){sb={code:r.code,name:r.label||'Devotion',color:'#ca8a04',type:'activity',fixed:1};S.subjects.push(sb);}
     sb.name=r.label||'Devotion';sb.fixed=1;sb.type='activity';
@@ -1242,15 +1243,15 @@ function renderSetup(){
   }
   if(setupTab==='classes'){
     const tops=S.teachers.map(t=>[t.id,t.name]);
-    h+=`<div class="card"><div class="tw"><table class="list"><tr><th>Class &amp; section</th><th>Shift</th><th>Class teacher</th><th>Room</th><th>Periods</th><th></th></tr>`+S.classes.map((c,i)=>{const tot=S.alloc.filter(a=>a.classId===c.id).reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
-      return `<tr><td><input type="text" ${dis} value="${esc(c.name)}" onchange="S.classes[${i}].name=this.value;save()"></td><td><select ${dis} onchange="S.classes[${i}].shift=this.value;save();renderSetup()">${shifts().map(s=>`<option value="${s}" ${c.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></td><td><select ${dis} onchange="S.classes[${i}].ct=this.value;save()">${teacherOptions(c.ct,c.shift,'—')}</select></td><td><select ${dis} onchange="S.classes[${i}].room=this.value;save()">${roomOpts(c.room,'Own class room')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td>${isAdmin?`<button class="btn sm red" onclick="delClass('${c.id}')">✕</button>`:''}</td></tr>`;}).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addClass()">+ Add class</button></div>':''}</div>`;
+    h+=`<div class="card"><div class="tw"><table class="list"><tr><th>Class &amp; section</th><th>Shift</th><th>Class teacher</th><th>Room</th><th>Subject periods</th><th></th></tr>`+S.classes.map((c,i)=>{const tot=S.alloc.filter(a=>a.classId===c.id).reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
+      return `<tr><td><input type="text" ${dis} value="${esc(c.name)}" onchange="S.classes[${i}].name=this.value;save()"></td><td><select ${dis} onchange="S.classes[${i}].shift=this.value;save();renderSetup()">${shifts().map(s=>`<option value="${s}" ${c.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></td><td><select ${dis} onchange="S.classes[${i}].ct=this.value;save()">${teacherOptions(c.ct,c.shift,'—')}</select></td><td><select ${dis} onchange="S.classes[${i}].room=this.value;save()">${roomOpts(c.room,'Own class room')}</select></td><td>${perPill(c.id)}</td><td>${isAdmin?`<button class="btn sm red" onclick="delClass('${c.id}')">✕</button>`:''}</td></tr>`;}).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addClass()">+ Add class</button></div>':''}</div>`;
   }
   if(setupTab==='alloc'){
     if(!S.classes.length){h+='<p class="muted">Add classes first.</p>';}
     else{if(!C()[allocCls])allocCls=S.classes[0].id;const c=C()[allocCls];
       const al=S.alloc.filter(a=>a.classId===allocCls),tot=al.reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
       const L=teacherLoad(S);
-      h+=`<div class="card"><div class="row"><label>Class<select onchange="allocCls=this.value;renderSetup()">${S.classes.map(x=>`<option value="${x.id}" ${x.id===allocCls?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">Allotted ${tot} of ${sl} periods/week</span>
+      h+=`<div class="card"><div class="row"><label>Class<select onchange="allocCls=this.value;renderSetup()">${S.classes.map(x=>`<option value="${x.id}" ${x.id===allocCls?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>${(()=>{const p=cPer(allocCls);return `<span class="pill ${p.cls}">Subjects: ${p.sub} of ${p.free} periods/week</span>${p.fx?`<span class="pill">⭐ ${p.fx} fixed (Devotion/Games) · ${p.sl} in the week</span>`:''}`;})()}
       ${isAdmin?`<label>Copy subjects from<select id="cpFrom"><option value="">—</option>${S.classes.filter(x=>x.id!==allocCls).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><button class="btn sm sec" onclick="copyAlloc()">Copy</button>`:''}</div>
       <div class="tw"><table class="list"><tr><th>Subject</th><th>Teacher</th><th>Periods/week</th><th>Max/day</th><th>Room</th><th></th></tr>`+al.filter(a=>!a.fixed).map(a=>`<tr><td><select ${dis} onchange="updAlloc('${a.id}','subject',this.value)">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===a.subject?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','teacherId',this.value)">${S.teachers.map(t=>`<option value="${t.id}" ${t.id===a.teacherId?'selected':''}>${esc(t.name)} (${L[t.id]||0})</option>`).join('')}</select></td><td><input type="number" ${dis} min="0" max="20" style="width:70px" value="${a.ppw}" onchange="updAlloc('${a.id}','ppw',+this.value)"></td><td><input type="number" ${dis} min="0" max="5" style="width:64px" placeholder="auto" value="${a.maxDay||''}" onchange="updAlloc('${a.id}','maxDay',+this.value||0)"></td><td><select ${dis} onchange="updAlloc('${a.id}','room',this.value)">${roomOpts(a.room,'Class room')}</select></td><td>${isAdmin?`<button class="btn sm red" onclick="delAlloc('${a.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addAlloc()">+ Add subject to class</button></div>':''}<p class="muted">Teacher's total load is shown in brackets. Changing allocation does not change the routine until you place it or run Auto Generate.</p>${al.filter(a=>a.fixed).map(a=>`<p class="muted">⭐ Fixed: <b>${esc(subj(a.subject).name)}</b> – ${a.ppw} period(s)/week (change in <a href="#setup" onclick="setupTab='fixed'">Devotion / Fixed</a>)</p>`).join('')}</div>`;}
   }
@@ -1330,6 +1331,9 @@ function unavailDlg(tid){
 }
 function togUn(tid,k,el){const t=T()[tid];const i=t.unavail.indexOf(k);if(i>=0)t.unavail.splice(i,1);else t.unavail.push(k);el.classList.toggle('on');el.textContent=i>=0?'':'⛔';save();}
 
+/* ---- period counts per class (fixed periods shown separately) ---- */
+function cPer(cid){const c=C()[cid];const sl=S.days.length*nPer(S,c.shift);let sub=0,fx=0;S.alloc.forEach(a=>{if(a.classId!==cid)return;if(a.fixed)fx+=+a.ppw||0;else sub+=+a.ppw||0;});const free=sl-fx;return {sl,sub,fx,free,cls:sub>free?'r':sub===free?'g':'a'};}
+function perPill(cid){const p=cPer(cid);return `<span class="pill ${p.cls}" title="Subject periods given / periods free for subjects. ${p.fx} period(s) are fixed (Devotion, Games…), ${p.sl} in the week.">${p.sub}/${p.free}</span>${p.fx?` <span class="muted" style="font-size:11px;white-space:nowrap">+ ${p.fx} ⭐</span>`:''}`;}
 /* ---- shift grouping for teachers & subjects ---- */
 const SHN={M:'🌅 Morning shift',N:'🌇 Noon shift',both:'🔁 Both shifts','':'❔ Not set yet'};
 const SHORD={M:0,both:1,N:2,'':3};
@@ -1390,8 +1394,8 @@ function renderCreate(){
   <div class="chips">${S.classes.filter(c=>c.shift===s4).map(c=>`<span class="chip ${WZ.t4.has(c.id)?'on':''}" style=""${WZ.t4.has(c.id)?'background:var(--navy);border-color:var(--navy)':''}" onclick="wzTog(WZ.t4,'${c.id}')">${esc(c.name)}</span>`).join('')}</div>
   <div class="row" style="margin-top:8px"><button class="btn gold" onclick="wzAddAlloc()">+ Add to selected classes</button></div>`;
   b4+=`<div class="tw"><table class="list"><tr><th>Class</th><th>Class teacher</th><th>Periods</th><th>Subjects (teacher · periods)</th></tr>${S.classes.filter(c=>c.shift===s4).map(c=>{const al=S.alloc.filter(a=>a.classId===c.id),tot=al.reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
-    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)">${teacherOptions(c.ct,c.shift,'—')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td style="font-size:12px">${al.map(a=>a.fixed?`⭐ ${esc(subj(a.subject).name)} · ${a.ppw}`:`${esc(a.subject)} · ${esc((TM[a.teacherId]||{}).abbr||'?')} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
-  <p class="muted">Green = class full (all periods given). Amber = periods still free (they stay empty, or fill them by hand). Red = too many periods.</p>`;
+    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)">${teacherOptions(c.ct,c.shift,'—')}</select></td><td>${perPill(c.id)}</td><td style="font-size:12px">${al.map(a=>a.fixed?`⭐ ${esc(subj(a.subject).name)} · ${a.ppw}`:`${esc(a.subject)} · ${esc((TM[a.teacherId]||{}).abbr||'?')} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
+  <p class="muted">Periods = subject periods given / periods free for subjects (the week minus ⭐ fixed periods like Devotion and Games). Green = full, amber = some still free, red = too many.</p>`;
   h+=wzCard(4,'Who teaches what',S.alloc.length>0,b4);
   // step 5
   const st=stats();
