@@ -1031,7 +1031,7 @@ function renderTT(){
   if(!S.days.includes(TV.day))TV.day=S.days[0];
   const lists={class:S.classes.map(c=>[c.id,c.name+' · '+((S.shifts[c.shift]||{}).name||'')]),teacher:S.teachers.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(t=>[t.id,t.name+' ('+t.abbr+')']),room:roomList()};
   const L=lists[TV.mode];if(!L.some(x=>x[0]===TV.id))TV.id=(L[0]||[])[0]||'';
-  fillSel($('ttId'),L,TV.id);
+  fillSel($('ttId'),L,TV.id);if(TV.mode==='teacher')$('ttId').innerHTML=teacherOptions(TV.id,'');
   $('ttMode').innerHTML=[['class','Class'],['teacher','Teacher'],['room','Room']].map(m=>`<button class="${TV.mode===m[0]?'act':''}" onclick="TV.mode='${m[0]}';TV.id='';renderTT()">${m[1]}</button>`).join('');
   $('ttView').innerHTML=[['week','Week'],['day','Day']].map(m=>`<button class="${TV.view===m[0]?'act':''}" onclick="TV.view='${m[0]}';renderTT()">${m[1]}</button>`).join('');
   $('pubBtn').style.display=isAdmin?'':'none';
@@ -1109,8 +1109,8 @@ function renderAdjustView(){$('aAuto').checked=!!S.settings.autoAdj;if(!$('aDate
 function loadAdjust(){const ds=$('aDate').value;const sv=S.adjust[ds];ADJ={date:ds,absent:sv?sv.absent.slice():[],subs:sv?Object.assign({},sv.subs):{},manual:sv?Object.assign({},sv.manual||{}):{}};drawAdjust();}
 function renderAbsentChips(){
   const q=$('aSearch').value.toLowerCase();
-  $('aChips').innerHTML=S.teachers.filter(t=>!q||t.name.toLowerCase().includes(q)||t.abbr.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name))
-   .map(t=>`<span class="chip ${ADJ.absent.includes(t.id)?'on':''}" onclick="toggleAbsent('${t.id}')">${esc(t.name)} · ${esc(t.abbr)}</span>`).join('')||'<span class="muted">No teacher found</span>';
+  const g=groupBy('t',S.teachers.filter(t=>!q||t.name.toLowerCase().includes(q)||t.abbr.toLowerCase().includes(q)));
+  $('aChips').innerHTML=['M','N','both',''].map(k=>g[k].length?`<div style="width:100%;font-size:12px;font-weight:700;color:var(--navy);margin-top:4px">${SHN[k]}</div>`+g[k].map(t=>`<span class="chip ${ADJ.absent.includes(t.id)?'on':''}" onclick="toggleAbsent('${t.id}')">${esc(t.name)} · ${esc(t.abbr)}</span>`).join(''):'').join('')||'<span class="muted">No teacher found</span>';
 }
 function toggleAbsent(tid){if(!needAdmin())return;const i=ADJ.absent.indexOf(tid);if(i>=0){ADJ.absent.splice(i,1);for(const k in ADJ.subs)if(adjRows().every(r=>r.key!==k))delete ADJ.subs[k];
   for(const k in ADJ.subs)if(ADJ.subs[k]===tid)delete ADJ.subs[k];}else{ADJ.absent.push(tid);for(const k in ADJ.subs)if(ADJ.subs[k]===tid)delete ADJ.subs[k];}
@@ -1231,17 +1231,18 @@ function renderSetup(){
       ${isAdmin?`<div class="row" style="margin-top:8px"><button class="btn sm" onclick="addPeriod('${sh}')">+ Add period</button><button class="btn sm red" onclick="delPeriod('${sh}')">− Remove last period</button></div>`:''}</div>`;});
   }
   if(setupTab==='subjects'){
-    h+=`<div class="card"><div class="tw"><table class="list"><tr><th>Code</th><th>Subject name</th><th>Type</th><th>Colour</th><th>Used</th><th></th></tr>`+S.subjects.map((s,i)=>{const used=S.alloc.filter(a=>a.subject===s.code).length;
-      return `<tr><td><input type="text" ${dis} value="${esc(s.code)}" onchange="renameSubj(${i},this.value)" style="width:80px"></td><td><input type="text" ${dis} value="${esc(s.name)}" onchange="S.subjects[${i}].name=this.value;save()"></td><td><select ${dis} onchange="S.subjects[${i}].type=this.value;save()"><option value="lecture" ${s.type!=='activity'?'selected':''}>Lecture</option><option value="activity" ${s.type==='activity'?'selected':''}>Activity</option></select></td><td><input type="color" ${dis} value="${s.color}" onchange="S.subjects[${i}].color=this.value;save()"></td><td>${used}</td><td>${isAdmin?`<button class="btn sm red" onclick="delSubj(${i})">✕</button>`:''}</td></tr>`;}).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addSubj()">+ Add subject</button></div>':''}</div>`;
+    const g=groupBy('s',S.subjects.filter(s=>!s.fixed));
+    h+=`<div class="card"><div class="row"><span class="muted">Show:</span>${shiftFilterBar(SF,'SF')}</div><div class="tw"><table class="list"><tr><th>Code</th><th>Subject name</th><th>Shift</th><th>Type</th><th>Colour</th><th>Used</th><th></th></tr>`+['M','N','both',''].filter(k=>SF==='all'||SF===k).map(k=>g[k].length?`<tr><td colspan="7" style="background:var(--tint);font-weight:700;color:var(--navy)">${SHN[k]} (${g[k].length})</td></tr>`+g[k].map(s=>{const i=S.subjects.indexOf(s);const used=S.alloc.filter(a=>a.subject===s.code).length;
+      return `<tr><td><input type="text" ${dis} value="${esc(s.code)}" onchange="renameSubj(${i},this.value)" style="width:80px"></td><td><input type="text" ${dis} value="${esc(s.name)}" onchange="S.subjects[${i}].name=this.value;save()"></td><td>${shiftSelect('s',i,s)}</td><td><select ${dis} onchange="S.subjects[${i}].type=this.value;save()"><option value="lecture" ${s.type!=='activity'?'selected':''}>Lecture</option><option value="activity" ${s.type==='activity'?'selected':''}>Activity</option></select></td><td><input type="color" ${dis} value="${s.color}" onchange="S.subjects[${i}].color=this.value;save()"></td><td>${used}</td><td>${isAdmin?`<button class="btn sm red" onclick="delSubj(${i})">✕</button>`:''}</td></tr>`;}).join(''):'').join('')+`</table></div><p class="muted">Shift “Auto” is worked out from the classes the subject is given to. Choose Morning / Noon / Both to set it yourself.</p>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addSubj()">+ Add subject</button></div>':''}</div>`;
   }
   if(setupTab==='teachers'){
-    const L=teacherLoad(S);
-    h+=`<div class="card"><div class="row"><input type="text" id="tFilter" placeholder="🔍 Search" oninput="filterRows('tRows',this.value)" style="flex:1"></div><div class="tw"><table class="list" id="tRows"><tr><th>Name</th><th>Abbr.</th><th>Phone</th><th>Max/day</th><th>Load</th><th>Not available</th><th></th></tr>`+S.teachers.map((t,i)=>`<tr><td><input type="text" ${dis} value="${esc(t.name)}" onchange="S.teachers[${i}].name=this.value;save()"></td><td><input type="text" ${dis} value="${esc(t.abbr)}" style="width:70px" onchange="S.teachers[${i}].abbr=this.value;save()"></td><td><input type="text" ${dis} value="${esc(t.phone||'')}" style="width:120px" onchange="S.teachers[${i}].phone=this.value;save()"></td><td><input type="number" ${dis} min="1" max="10" style="width:64px" value="${t.maxDay||6}" onchange="S.teachers[${i}].maxDay=+this.value;save()"></td><td>${L[t.id]||0}</td><td><button class="btn sm sec" onclick="unavailDlg('${t.id}')">⛔ Slots (${(t.unavail||[]).length})</button></td><td>${isAdmin?`<button class="btn sm red" onclick="delTeacher('${t.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addTeacher()">+ Add teacher</button></div>':''}</div>`;
+    const L=teacherLoad(S),g=groupBy('t',S.teachers);
+    h+=`<div class="card"><div class="row"><span class="muted">Show:</span>${shiftFilterBar(TF,'TF')}<input type="text" id="tFilter" placeholder="🔍 Search" oninput="filterRows('tRows',this.value)" style="flex:1;min-width:150px"></div><div class="tw"><table class="list" id="tRows"><tr><th>Name</th><th>Abbr.</th><th>Shift</th><th>Phone</th><th>Max/day</th><th>Load</th><th>Not available</th><th></th></tr>`+['M','N','both',''].filter(k=>TF==='all'||TF===k).map(k=>g[k].length?`<tr><td colspan="8" style="background:var(--tint);font-weight:700;color:var(--navy)">${SHN[k]} (${g[k].length})</td></tr>`+g[k].map(t=>{const i=S.teachers.indexOf(t);return `<tr><td><input type="text" ${dis} value="${esc(t.name)}" onchange="S.teachers[${i}].name=this.value;save()"></td><td><input type="text" ${dis} value="${esc(t.abbr)}" style="width:70px" onchange="S.teachers[${i}].abbr=this.value;save()"></td><td>${shiftSelect('t',i,t)}</td><td><input type="text" ${dis} value="${esc(t.phone||'')}" style="width:120px" onchange="S.teachers[${i}].phone=this.value;save()"></td><td><input type="number" ${dis} min="1" max="10" style="width:64px" value="${t.maxDay||6}" onchange="S.teachers[${i}].maxDay=+this.value;save()"></td><td>${L[t.id]||0}</td><td><button class="btn sm sec" onclick="unavailDlg('${t.id}')">⛔ Slots (${(t.unavail||[]).length})</button></td><td>${isAdmin?`<button class="btn sm red" onclick="delTeacher('${t.id}')">✕</button>`:''}</td></tr>`;}).join(''):'').join('')+`</table></div><p class="muted">Shift “Auto” is worked out from the classes each teacher teaches. Choose Morning / Noon / Both to set it yourself.</p>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addTeacher()">+ Add teacher</button></div>':''}</div>`;
   }
   if(setupTab==='classes'){
     const tops=S.teachers.map(t=>[t.id,t.name]);
     h+=`<div class="card"><div class="tw"><table class="list"><tr><th>Class &amp; section</th><th>Shift</th><th>Class teacher</th><th>Room</th><th>Periods</th><th></th></tr>`+S.classes.map((c,i)=>{const tot=S.alloc.filter(a=>a.classId===c.id).reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
-      return `<tr><td><input type="text" ${dis} value="${esc(c.name)}" onchange="S.classes[${i}].name=this.value;save()"></td><td><select ${dis} onchange="S.classes[${i}].shift=this.value;save();renderSetup()">${shifts().map(s=>`<option value="${s}" ${c.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></td><td><select ${dis} onchange="S.classes[${i}].ct=this.value;save()"><option value="">—</option>${tops.map(t=>`<option value="${t[0]}" ${c.ct===t[0]?'selected':''}>${esc(t[1])}</option>`).join('')}</select></td><td><select ${dis} onchange="S.classes[${i}].room=this.value;save()">${roomOpts(c.room,'Own class room')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td>${isAdmin?`<button class="btn sm red" onclick="delClass('${c.id}')">✕</button>`:''}</td></tr>`;}).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addClass()">+ Add class</button></div>':''}</div>`;
+      return `<tr><td><input type="text" ${dis} value="${esc(c.name)}" onchange="S.classes[${i}].name=this.value;save()"></td><td><select ${dis} onchange="S.classes[${i}].shift=this.value;save();renderSetup()">${shifts().map(s=>`<option value="${s}" ${c.shift===s?'selected':''}>${esc(S.shifts[s].name)}</option>`).join('')}</select></td><td><select ${dis} onchange="S.classes[${i}].ct=this.value;save()">${teacherOptions(c.ct,c.shift,'—')}</select></td><td><select ${dis} onchange="S.classes[${i}].room=this.value;save()">${roomOpts(c.room,'Own class room')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td>${isAdmin?`<button class="btn sm red" onclick="delClass('${c.id}')">✕</button>`:''}</td></tr>`;}).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addClass()">+ Add class</button></div>':''}</div>`;
   }
   if(setupTab==='alloc'){
     if(!S.classes.length){h+='<p class="muted">Add classes first.</p>';}
@@ -1284,7 +1285,7 @@ function fxCls(i,cid){const r=S.fixed[i];r.classIds=r.classIds.includes(cid)?r.c
 function roomOpts(sel,blank){return `<option value="">${blank}</option>`+S.rooms.map(r=>`<option value="${r.id}" ${r.id===sel?'selected':''}>${esc(r.name)}</option>`).join('');}
 function addRoom(){let n=S.rooms.length+1;while(S.rooms.some(r=>r.id==='r'+n))n++;S.rooms.push({id:'r'+n,name:'New Room '+n});save();renderSetup();}
 function delRoom(id){ask('Delete this room? Subjects using it go back to their class room.',()=>{S.rooms=S.rooms.filter(r=>r.id!==id);S.alloc.forEach(a=>{if(a.room===id)a.room='';});S.classes.forEach(c=>{if(c.room===id)c.room='';});save();renderSetup();});}
-function filterRows(id,q){q=q.toLowerCase();document.querySelectorAll('#'+id+' tr').forEach((tr,i)=>{if(i===0)return;const v=[...tr.querySelectorAll('input')].map(x=>x.value).join(' ').toLowerCase();tr.style.display=v.includes(q)?'':'none';});}
+function filterRows(id,q){q=q.toLowerCase();document.querySelectorAll('#'+id+' tr').forEach((tr,i)=>{if(i===0||!tr.querySelector('input'))return;const v=[...tr.querySelectorAll('input')].map(x=>x.value).join(' ').toLowerCase();tr.style.display=v.includes(q)?'':'none';});}
 function toggleDay(i,on){if(on){if(!S.days.includes(i))S.days.push(i);S.days.sort();}else{S.days=S.days.filter(x=>x!==i);for(const c in S.tt)for(const k in S.tt[c])if(+k.split('|')[0]===i)delete S.tt[c][k];}save();}
 function addBreak(sh){const s=S.shifts[sh];s.breaks=s.breaks||[];s.breaks.push({after:Math.min(s.periods.length-1,Math.max(1,(s.breaks.length?+s.breaks[s.breaks.length-1].after+2:2))),label:'Break '+(s.breaks.length+1)});save();renderSetup();}
 const toMin=t=>{const [a,b]=String(t).split(':');return (+a)*60+(+b||0);},toHM=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
@@ -1322,8 +1323,30 @@ function unavailDlg(tid){
 }
 function togUn(tid,k,el){const t=T()[tid];const i=t.unavail.indexOf(k);if(i>=0)t.unavail.splice(i,1);else t.unavail.push(k);el.classList.toggle('on');el.textContent=i>=0?'':'⛔';save();}
 
+/* ---- shift grouping for teachers & subjects ---- */
+const SHN={M:'🌅 Morning shift',N:'🌇 Noon shift',both:'🔁 Both shifts','':'❔ Not set yet'};
+const SHORD={M:0,both:1,N:2,'':3};
+function effShift(kind,o){if(o.shift==='M'||o.shift==='N'||o.shift==='both')return o.shift;const CM=C(),set=new Set();
+  S.alloc.forEach(a=>{if(a.fixed)return;if(kind==='t'?a.teacherId===o.id:a.subject===o.code){const c=CM[a.classId];if(c)set.add(c.shift);}});
+  if(kind==='t')S.classes.forEach(c=>{if(c.ct===o.id)set.add(c.shift);});
+  return set.size===0?'':set.size>1?'both':[...set][0];}
+const fitsShift=(eff,sh)=>!sh||eff===sh||eff==='both'||eff==='';
+function groupBy(kind,list){const g={M:[],both:[],N:[],'':[]};list.forEach(o=>g[effShift(kind,o)].push(o));Object.values(g).forEach(a=>a.sort((x,y)=>x.name.localeCompare(y.name)));return g;}
+function teacherOptions(sel,sh,blank){const g=groupBy('t',S.teachers);let o=blank?`<option value="">${blank}</option>`:'';
+  ['M','N','both',''].forEach(k=>{if(sh&&!(k===sh||k==='both'||k===''))return;if(!g[k].length)return;o+=`<optgroup label="${SHN[k]}">`+g[k].map(t=>`<option value="${t.id}" ${t.id===sel?'selected':''}>${esc(t.name)} (${esc(t.abbr)})</option>`).join('')+'</optgroup>';});
+  if(sel&&sh&&!o.includes(`value="${sel}"`)){const t=T()[sel];if(t)o+=`<option value="${sel}" selected>${esc(t.name)} (other shift)</option>`;}
+  return o;}
+function subjectOptions(sel,sh){const g=groupBy('s',S.subjects.filter(s=>!s.fixed));let o='';
+  ['M','N','both',''].forEach(k=>{if(sh&&!(k===sh||k==='both'||k===''))return;if(!g[k].length)return;o+=`<optgroup label="${SHN[k]}">`+g[k].map(s=>`<option value="${esc(s.code)}" ${s.code===sel?'selected':''}>${esc(s.name)}</option>`).join('')+'</optgroup>';});
+  if(sel&&!o.includes(`value="${esc(sel)}"`)){const s=subj(sel);o+=`<option value="${esc(sel)}" selected>${esc(s.name)} (other shift)</option>`;}
+  return o;}
+function shiftSelect(kind,i,o){const eff=effShift(kind,{...o,shift:''});const arr=kind==='t'?'teachers':'subjects';
+  return `<select ${isAdmin?'':'disabled'} onchange="S.${arr}[${i}].shift=this.value;save();renderSetup()"><option value="" ${!o.shift?'selected':''}>Auto${eff?' – '+(eff==='both'?'Both':eff==='M'?'Morning':'Noon'):''}</option><option value="M" ${o.shift==='M'?'selected':''}>Morning</option><option value="N" ${o.shift==='N'?'selected':''}>Noon</option><option value="both" ${o.shift==='both'?'selected':''}>Both</option></select>`;}
+let TF='all',SF='all';
+function shiftFilterBar(cur,setter){return `<div class="seg">${[['all','All'],['M','Morning'],['N','Noon'],['both','Both'],['','Not set']].map(([k,l])=>`<button class="${cur===k?'act':''}" onclick="${setter}='${k}';renderSetup()">${l}</button>`).join('')}</div>`;}
+
 /* ---- create routine wizard ---- */
-const WZ={shift:'N',cls:new Set(),sec:new Set(['A','B','C']),t4:new Set(),tid:'',sub:'',ppw:6};
+const WZ={s4:'N',tshift:'',shift:'N',cls:new Set(),sec:new Set(['A','B','C']),t4:new Set(),tid:'',sub:'',ppw:6};
 const CLASS_LIST=['Nursery','KG','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
 function wzCard(n,title,done,body){return `<div class="card" style="border-left:5px solid ${done?'var(--green)':'var(--gold)'}"><h3><span class="pill ${done?'g':'a'}" style="font-size:13px">${done?'✓':n}</span> Step ${n}: ${title}</h3>${body}</div>`;}
 function renderCreate(){
@@ -1344,20 +1367,22 @@ function renderCreate(){
   h+=wzCard(2,'Classes &amp; sections',S.classes.length>0,b2);
   // step 3
   let b3=`<p class="muted" style="margin:0 0 4px">Type one teacher per line. Short name after a comma is optional (e.g. <i>Lalramenga, LRM</i>).</p><textarea id="wzT" style="min-height:90px;font-family:inherit;font-size:14px" placeholder="Teacher name, ABBR"></textarea>
-  <div class="row" style="margin-top:8px"><button class="btn" onclick="wzAddTeachers()">+ Add teachers</button></div>
-  <div class="chips">${S.teachers.map(t=>`<span class="chip">${esc(t.name)} · ${esc(t.abbr)} <span class="muted">${L[t.id]||0}</span> <b style="color:var(--red);cursor:pointer" onclick="delTeacher('${t.id}')">✕</b></span>`).join('')||'<span class="muted">none yet</span>'}</div>`;
+  <div class="row" style="margin-top:8px"><label>These teachers teach in<select onchange="WZ.tshift=this.value">${[['','Decide automatically'],['M','Morning shift'],['N','Noon shift'],['both','Both shifts']].map(([k,l])=>`<option value="${k}" ${WZ.tshift===k?'selected':''}>${l}</option>`).join('')}</select></label><button class="btn" onclick="wzAddTeachers()">+ Add teachers</button></div>
+  ${(()=>{const g=groupBy('t',S.teachers);return ['M','N','both',''].map(k=>g[k].length?`<p style="margin:8px 0 4px"><b>${SHN[k]}</b> (${g[k].length})</p><div class="chips">${g[k].map(t=>`<span class="chip">${esc(t.name)} · ${esc(t.abbr)} <span class="muted">${L[t.id]||0}</span> <b style="color:var(--red);cursor:pointer" onclick="delTeacher('${t.id}')">✕</b></span>`).join('')}</div>`:'').join('')||'<span class="muted">none yet</span>';})()}`;
   h+=wzCard(3,'Teachers',S.teachers.length>0,b3);
   // step 4
-  if(!WZ.tid||!TM[WZ.tid])WZ.tid=(S.teachers[0]||{}).id||'';if(!WZ.sub||!S.subjects.some(s=>s.code===WZ.sub))WZ.sub=(S.subjects[0]||{}).code||'';
+  const s4=WZ.s4;const tOK=S.teachers.filter(t=>fitsShift(effShift('t',t),s4)),sOK=S.subjects.filter(s=>!s.fixed&&fitsShift(effShift('s',s),s4));
+  if(!WZ.tid||!tOK.some(t=>t.id===WZ.tid))WZ.tid=(tOK[0]||S.teachers[0]||{}).id||'';if(!WZ.sub||!sOK.some(s=>s.code===WZ.sub))WZ.sub=(sOK[0]||S.subjects[0]||{}).code||'';
   let b4=`<p class="muted" style="margin:0 0 6px">Choose a teacher and subject, tap the classes they teach, set periods per week, then Add. Repeat for every teacher.</p>
-  <div class="row"><label>Teacher<select onchange="WZ.tid=this.value;renderCreate()">${S.teachers.map(t=>`<option value="${t.id}" ${t.id===WZ.tid?'selected':''}>${esc(t.name)} (${L[t.id]||0})</option>`).join('')}</select></label>
-  <label>Subject<select onchange="WZ.sub=this.value">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===WZ.sub?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>
+  <div class="row"><span class="muted">Working on:</span><div class="seg">${shifts().map(k=>`<button class="${s4===k?'act':''}" onclick="WZ.s4='${k}';WZ.t4.clear();renderCreate()">${esc(S.shifts[k].name)}</button>`).join('')}</div><span class="muted" style="font-size:12px">Only this shift's teachers, subjects and classes are shown.</span></div>
+  <div class="row"><label>Teacher<select onchange="WZ.tid=this.value;renderCreate()">${teacherOptions(WZ.tid,s4)}</select></label>
+  <label>Subject<select onchange="WZ.sub=this.value">${subjectOptions(WZ.sub,s4)}</select></label>
   <label>Periods / week<input type="number" min="1" max="15" style="width:80px" value="${WZ.ppw}" onchange="WZ.ppw=+this.value"></label>
   <label>New subject?<span style="display:flex;gap:4px"><input type="text" id="wzSub" placeholder="Subject name" style="width:130px"><button class="btn sm sec" onclick="wzAddSubj()">+</button></span></label></div>
-  <div class="chips">${S.classes.map(c=>`<span class="chip ${WZ.t4.has(c.id)?'on':''}" style="${WZ.t4.has(c.id)?'background:var(--navy);border-color:var(--navy)':''}" onclick="wzTog(WZ.t4,'${c.id}')">${esc(c.name)}</span>`).join('')}</div>
+  <div class="chips">${S.classes.filter(c=>c.shift===s4).map(c=>`<span class="chip ${WZ.t4.has(c.id)?'on':''}" style=""${WZ.t4.has(c.id)?'background:var(--navy);border-color:var(--navy)':''}" onclick="wzTog(WZ.t4,'${c.id}')">${esc(c.name)}</span>`).join('')}</div>
   <div class="row" style="margin-top:8px"><button class="btn gold" onclick="wzAddAlloc()">+ Add to selected classes</button></div>`;
-  b4+=`<div class="tw"><table class="list"><tr><th>Class</th><th>Class teacher</th><th>Periods</th><th>Subjects (teacher · periods)</th></tr>${S.classes.map(c=>{const al=S.alloc.filter(a=>a.classId===c.id),tot=al.reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
-    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)"><option value="">—</option>${S.teachers.map(t=>`<option value="${t.id}" ${c.ct===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td style="font-size:12px">${al.map(a=>a.fixed?`⭐ ${esc(subj(a.subject).name)} · ${a.ppw}`:`${esc(a.subject)} · ${esc((TM[a.teacherId]||{}).abbr||'?')} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
+  b4+=`<div class="tw"><table class="list"><tr><th>Class</th><th>Class teacher</th><th>Periods</th><th>Subjects (teacher · periods)</th></tr>${S.classes.filter(c=>c.shift===s4).map(c=>{const al=S.alloc.filter(a=>a.classId===c.id),tot=al.reduce((s,a)=>s+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift);
+    return `<tr><td><b>${esc(c.name)}</b></td><td><select onchange="setCT('${c.id}',this.value)">${teacherOptions(c.ct,c.shift,'—')}</select></td><td><span class="pill ${tot>sl?'r':tot===sl?'g':'a'}">${tot}/${sl}</span></td><td style="font-size:12px">${al.map(a=>a.fixed?`⭐ ${esc(subj(a.subject).name)} · ${a.ppw}`:`${esc(a.subject)} · ${esc((TM[a.teacherId]||{}).abbr||'?')} · ${a.ppw} <b style="color:var(--red);cursor:pointer" onclick="delAlloc('${a.id}');renderCreate()">✕</b>`).join(' &nbsp;|&nbsp; ')||'<span class="muted">none</span>'}</td></tr>`;}).join('')}</table></div>
   <p class="muted">Green = class full (all periods given). Amber = periods still free (they stay empty, or fill them by hand). Red = too many periods.</p>`;
   h+=wzCard(4,'Who teaches what',S.alloc.length>0,b4);
   // step 5
@@ -1379,10 +1404,10 @@ function wzAddTeachers(){const lines=$('wzT').value.split('\n').map(x=>x.trim())
   lines.forEach(l=>{let [name,ab]=l.split(',').map(x=>(x||'').trim());if(!name||S.teachers.some(t=>t.name.toLowerCase()===name.toLowerCase()))return;
     if(!ab)ab=name.replace(/^(sir|mr|mrs|ms|miss|madam|dr)\.?\s+/i,'').split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,4);
     if(ab.length<2)ab=name.replace(/\s+/g,'').slice(0,3).toUpperCase();let base=ab,i=2;while(S.teachers.some(t=>t.abbr===ab))ab=base+(i++);
-    let k=S.teachers.length+1;while(S.teachers.some(t=>t.id==='t'+k))k++;S.teachers.push({id:'t'+k,name,abbr:ab,phone:'',maxDay:6,unavail:[]});n++;});
+    let k=S.teachers.length+1;while(S.teachers.some(t=>t.id==='t'+k))k++;S.teachers.push({id:'t'+k,name,abbr:ab,phone:'',maxDay:6,unavail:[],shift:WZ.tshift||''});n++;});
   save();renderCreate();toast(n+' teacher(s) added');}
 function wzAddSubj(){const v=$('wzSub').value.trim();if(!v)return;let code=v.replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase()||'SUB',base=code,i=2;while(S.subjects.some(s=>s.code===code))code=base+(i++);
-  S.subjects.push({code,name:v,color:'#'+Math.floor(Math.random()*0xaaaaaa).toString(16).padStart(6,'0')});WZ.sub=code;save();renderCreate();}
+  S.subjects.push({code,name:v,color:'#'+Math.floor(Math.random()*0xaaaaaa).toString(16).padStart(6,'0'),type:'lecture',shift:''});WZ.sub=code;save();renderCreate();}
 function wzAddAlloc(){if(!WZ.tid||!WZ.sub){toast('Choose teacher and subject');return;}if(!WZ.t4.size){toast('Tap the classes');return;}
   WZ.t4.forEach(cid=>{const ex=S.alloc.find(a=>a.classId===cid&&a.subject===WZ.sub);if(ex){ex.teacherId=WZ.tid;ex.ppw=WZ.ppw;}else S.alloc.push({id:uid(),classId:cid,subject:WZ.sub,teacherId:WZ.tid,ppw:WZ.ppw});});
   const n=WZ.t4.size;WZ.t4.clear();save();renderCreate();toast('Added to '+n+' class(es)');}
