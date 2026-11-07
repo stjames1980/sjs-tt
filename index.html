@@ -532,22 +532,23 @@ function spreadReport(S){const A=allocMap(S),C=classMap(S);let hardEdge=0,hard=0
   for(const cid in S.tt){if(!C[cid])continue;const np=nPer(S,C[cid].shift);for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(!a||a.fixed)continue;const p=+k.split('|')[1],lv=subjLevel(S,a.subject);
     if(lv==='hard'){hard++;if(p===0||p===np-1)hardEdge++;}if(lv==='light'){light++;if(p>=np-2)lightLast++;}}}
   return {hard,hardEdge,light,lightLast};}
+function grpMembers(S,a){return a&&a.grp?S.alloc.filter(x=>x.grp===a.grp):a?[a]:[];}
 function maxWeekOf(S,t){return (t&&+t.maxWeek)||+(S.settings||{}).teacherMaxWeek||0;}
 function breakAfter(S,sh,p){return ((S.shifts[sh]||{}).breaks||[]).some(b=>+b.after===p+1);}
 function TIDS(a){return a?[a.teacherId,a.t2].filter((x,i,r)=>x&&r.indexOf(x)===i):[];}
 
 /* teacher busy index: key tid|shift|d|p -> [classId] */
 function busyIndex(S){
-  const A=allocMap(S),C=classMap(S),idx={};
+  const A=allocMap(S),C=classMap(S),idx={},seen={};
   for(const cid in S.tt){const c=C[cid];if(!c)continue;
     for(const k in S.tt[cid]){const cell=S.tt[cid][k];const a=A[cell.a];if(!a)continue;
-      TIDS(a).forEach(tid=>{const key=tid+'|'+c.shift+'|'+k;(idx[key]=idx[key]||[]).push(cid);});}}
+      TIDS(a).forEach(tid=>{const key=tid+'|'+c.shift+'|'+k;if(a.grp){const gk=key+'#'+a.grp;if(seen[gk])return;seen[gk]=1;}(idx[key]=idx[key]||[]).push(cid);});}}
   return idx;
 }
 function roomOf(S,cid,a){return (a&&a.room)||(S.classes.find(c=>c.id===cid)||{}).room||('cls:'+cid);}
 function roomName(S,rid){if(String(rid).startsWith('cls:')){const c=S.classes.find(x=>x.id===rid.slice(4));return c?c.name+' (class room)':'?';}const r=(S.rooms||[]).find(x=>x.id===rid);return r?r.name:rid;}
-function roomIndex(S){const A=allocMap(S),C=classMap(S),idx={};
-  for(const cid in S.tt){const c=C[cid];if(!c)continue;for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(!a)continue;const key=roomOf(S,cid,a)+'|'+c.shift+'|'+k;(idx[key]=idx[key]||[]).push(cid);if(a.s2&&a.room2){const k2=a.room2+'|'+c.shift+'|'+k;(idx[k2]=idx[k2]||[]).push(cid);}}}return idx;}
+function roomIndex(S){const A=allocMap(S),C=classMap(S),idx={},seen={};
+  for(const cid in S.tt){const c=C[cid];if(!c)continue;for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(!a)continue;if(a.grp){const gk=a.grp+'|'+c.shift+'|'+k;if(seen[gk])continue;seen[gk]=1;}const key=roomOf(S,cid,a)+'|'+c.shift+'|'+k;(idx[key]=idx[key]||[]).push(cid);if(a.s2&&a.room2){const k2=a.room2+'|'+c.shift+'|'+k;(idx[k2]=idx[k2]||[]).push(cid);}}}return idx;}
 function roomClashes(S){const idx=roomIndex(S),A=allocMap(S),out=[];for(const key in idx){const k4=key.split('|').slice(2).join('|');idx[key]=idx[key].filter(cid=>{const c=(S.tt[cid]||{})[k4];return !(c&&A[c.a]&&A[c.a].fixed);});}for(const key in idx)if(idx[key].length>1){const [r,sh,d,p]=key.split('|');out.push({room:r,name:roomName(S,r),shift:sh,d:+d,p:+p,classes:idx[key]});}return out;}
 function clashes(S){
   const idx=busyIndex(S),T=teacherMap(S),out=[];
@@ -556,13 +557,14 @@ function clashes(S){
   return out;
 }
 function placedCount(S){const cnt={};for(const cid in S.tt)for(const k in S.tt[cid]){const a=S.tt[cid][k].a;cnt[a]=(cnt[a]||0)+1;}return cnt;}
-function teacherLoad(S){const A=allocMap(S),l={};S.alloc.forEach(a=>TIDS(a).forEach(t=>l[t]=(l[t]||0)+(+a.ppw||0)));return l;}
-function teacherPlaced(S){const A=allocMap(S),l={};for(const cid in S.tt)for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(a)TIDS(a).forEach(t=>l[t]=(l[t]||0)+1);}return l;}
+function teacherLoad(S){const A=allocMap(S),l={},sg={};S.alloc.forEach(a=>{if(a.grp){if(sg[a.grp])return;sg[a.grp]=1;}TIDS(a).forEach(t=>l[t]=(l[t]||0)+(+a.ppw||0));});return l;}
+function teacherPlaced(S){const A=allocMap(S),C=classMap(S),l={},sg={};for(const cid in S.tt)for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(!a)continue;if(a.grp){const gk=a.grp+'|'+((C[cid]||{}).shift)+'|'+k;if(sg[gk])continue;sg[gk]=1;}TIDS(a).forEach(t=>l[t]=(l[t]||0)+1);}return l;}
 
 /* ===== GENERATOR ===== */
 function generate(S,opt){
   opt=opt||{};
   const target=new Set(opt.classIds||S.classes.map(c=>c.id));
+  S.alloc.forEach(a=>{if(a.grp&&target.has(a.classId))S.alloc.filter(x=>x.grp===a.grp).forEach(x=>target.add(x.classId));});
   const attempts=opt.attempts||S.settings.attempts||40;
   const A=allocMap(S),C=classMap(S),T=teacherMap(S);
   const days=S.days.slice().sort();
@@ -574,7 +576,7 @@ function generate(S,opt){
     const tt={};
     for(const cid in S.tt){if(!C[cid])continue;tt[cid]={};
       for(const k in S.tt[cid]){const cell=S.tt[cid][k];if(!A[cell.a])continue;
-        if(!target.has(cid)||cell.l||cell.fx)tt[cid][k]=cell.fx?{a:cell.a,l:1,fx:1}:{a:cell.a,l:cell.l?1:0};}}
+        if(!target.has(cid)||cell.l||cell.fx){tt[cid][k]=cell.fx?{a:cell.a,l:1,fx:1}:{a:cell.a,l:cell.l?1:0};if(cell.g)tt[cid][k].g=1;if(cell.dp)tt[cid][k].dp=1;}}}
     S.classes.forEach(c=>{tt[c.id]=tt[c.id]||{};});
     const busy={},tDay={},sDay={},aCnt={},rB={};
     const bk=(tid,sh,d,p)=>tid+'|'+sh+'|'+d+'|'+p;
@@ -603,7 +605,8 @@ function generate(S,opt){
         if((tDay[tid+'|'+d]||0)>=tmax+(relax?1:0))return false;}
       return true;
     }
-    function put(cid,d,p,aid,ct){tt[cid][SK(d,p)]=ct?{a:aid,l:0,ct:1}:{a:aid,l:0};mark(cid,d,p,aid,1);}
+    function put(cid,d,p,aid,ct,fl){const o=ct?{a:aid,l:0,ct:1}:{a:aid,l:0};if(fl)Object.assign(o,fl);tt[cid][SK(d,p)]=o;mark(cid,d,p,aid,1);}
+    const fixedCell=cl=>cl.l||cl.ct||cl.fx||cl.g||cl.dp;
     function take(cid,d,p){const cell=tt[cid][SK(d,p)];mark(cid,d,p,cell.a,-1);delete tt[cid][SK(d,p)];return cell.a;}
     function score(cid,d,p,aid){
       const a=A[aid],np=nPer(S,C[cid].shift);let s=(sDay[cid+'|'+d+'|'+a.subject]||0)*12+(tDay[a.teacherId+'|'+d]||0)*1.5;
@@ -622,14 +625,33 @@ function generate(S,opt){
       });
     }
     const units=[];
+    const gDone={};
     S.alloc.forEach(a=>{if(a.fixed||!target.has(a.classId)||!C[a.classId]||!T[a.teacherId])return;
-      const need=(+a.ppw||0)-(aCnt[a.id]||0);
+      let mem=null;if(a.grp){if(gDone[a.grp])return;gDone[a.grp]=1;mem=S.alloc.filter(x=>x.grp===a.grp&&C[x.classId]&&target.has(x.classId));if(mem.length<2)mem=null;}
+      let need=(+a.ppw||0)-(aCnt[a.id]||0);
       const w=(tLoad[a.teacherId]||0)+a.ppw*1.5+(unavC[a.teacherId]?unavC[a.teacherId].size:0)+R()*4;
+      if(mem){for(let i=0;i<need;i++)units.push({aid:a.id,mem:mem.map(x=>x.id),w:w+1000});return;}
+      const pairs=Math.min(+a.dbl||0,Math.floor(need/2));
+      for(let i=0;i<pairs;i++)units.push({aid:a.id,pair:1,w:w+500});need-=pairs*2;
       for(let i=0;i<need;i++)units.push({aid:a.id,w});});
     units.sort((x,y)=>y.w-x.w);
     const unplaced=[];
     for(const u of units){
       const a=A[u.aid],cid=a.classId,np=nPer(S,C[cid].shift);
+      if(u.mem){let bestS=null,bs=1e9;
+        for(const d of days)for(let p=0;p<np;p++){if(!u.mem.every(id=>{const m=A[id];return nPer(S,C[m.classId].shift)===np&&!tt[m.classId][SK(d,p)];}))continue;
+          if(!ok(cid,d,p,u.aid,0))continue;let good=true;for(const id of u.mem){if(id===u.aid)continue;const m=A[id];const s2=(sDay[m.classId+'|'+d+'|'+m.subject]||0);if(s2>=(+m.maxDay||maxSame)||(m.room&&rB[m.room+'|'+C[m.classId].shift+'|'+d+'|'+p])){good=false;break;}}
+          if(!good)continue;const sc=score(cid,d,p,u.aid);if(sc<bs){bs=sc;bestS=[d,p];}}
+        if(bestS){const [d,p]=bestS;put(cid,d,p,u.aid,0,{g:1});u.mem.forEach(id=>{if(id===u.aid)return;const m=A[id];tt[m.classId][SK(d,p)]={a:id,l:0,g:1};sDay[m.classId+'|'+d+'|'+m.subject]=(sDay[m.classId+'|'+d+'|'+m.subject]||0)+1;aCnt[id]=(aCnt[id]||0)+1;});}
+        else unplaced.push(u.aid);
+        continue;}
+      if(u.pair){let bestS=null,bs=1e9;const sh=C[cid].shift;
+        for(const d of days)for(let p=0;p<np-1;p++){if(breakAfter(S,sh,p))continue;if(!ok(cid,d,p,u.aid,0))continue;
+          put(cid,d,p,u.aid);const lim2=(+a.maxDay||maxSame)<2?1:0;const ok2=ok(cid,d,p+1,u.aid,lim2);const sc=ok2?score(cid,d,p+1,u.aid):0;take(cid,d,p);
+          if(ok2){const t=score(cid,d,p,u.aid)+sc;if(t<bs){bs=t;bestS=[d,p];}}}
+        if(bestS){put(cid,bestS[0],bestS[1],u.aid,0,{dp:1});put(cid,bestS[0],bestS[1]+1,u.aid,0,{dp:1});}
+        else{units.push({aid:u.aid,w:0,fromPair:1},{aid:u.aid,w:0,fromPair:1});}
+        continue;}
       let placed=false;
       for(let relax=0;relax<=1&&!placed;relax++){
         let bestS=null,bs=1e9;
@@ -637,7 +659,7 @@ function generate(S,opt){
         if(bestS){put(cid,bestS[0],bestS[1],u.aid);placed=true;break;}
         // swap repair: free a slot where our teacher is free by moving the class's lesson elsewhere
         const cands=[];
-        for(const d of days)for(let p=0;p<np;p++){const cell=tt[cid][SK(d,p)];if(cell&&!cell.l&&!cell.ct&&!cell.fx)cands.push([d,p]);}
+        for(const d of days)for(let p=0;p<np;p++){const cell=tt[cid][SK(d,p)];if(cell&&!fixedCell(cell))cands.push([d,p]);}
         for(let i=cands.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[cands[i],cands[j]]=[cands[j],cands[i]];}
         for(const [d,p] of cands){
           const other=take(cid,d,p);
@@ -654,7 +676,7 @@ function generate(S,opt){
           outer:for(const d of days)for(let p=0;p<np;p++){
             if(tt[cid][SK(d,p)])continue;
             const sh=C[cid].shift;if(!busy[bk(a.teacherId,sh,d,p)])continue;
-            const oc=S.classes.find(c=>c.shift===sh&&target.has(c.id)&&tt[c.id][SK(d,p)]&&!tt[c.id][SK(d,p)].l&&!tt[c.id][SK(d,p)].ct&&TIDS(A[tt[c.id][SK(d,p)].a]).includes(a.teacherId));
+            const oc=S.classes.find(c=>c.shift===sh&&target.has(c.id)&&tt[c.id][SK(d,p)]&&!fixedCell(tt[c.id][SK(d,p)])&&TIDS(A[tt[c.id][SK(d,p)].a]).includes(a.teacherId));
             if(!oc)continue;
             const oa=take(oc.id,d,p);
             if(ok(cid,d,p,u.aid,1)){
@@ -670,7 +692,7 @@ function generate(S,opt){
     // improve: swap two lessons of the same class when it moves difficult subjects off first/last period
     if(S.settings.spread!==false)for(let pass=0;pass<3;pass++){let imp=0;
       for(const c of S.classes){if(!target.has(c.id))continue;const cid=c.id,np=nPer(S,c.shift);
-        const cells=[];for(const d of days)for(let p=0;p<np;p++){const cl=tt[cid][SK(d,p)];if(cl&&!cl.l&&!cl.ct&&!cl.fx)cells.push([d,p]);}
+        const cells=[];for(const d of days)for(let p=0;p<np;p++){const cl=tt[cid][SK(d,p)];if(cl&&!fixedCell(cl))cells.push([d,p]);}
         for(let i=0;i<cells.length;i++)for(let j=i+1;j<cells.length;j++){
           const [d1,p1]=cells[i],[d2,p2]=cells[j];if(p1===p2)continue;
           const c1=tt[cid][SK(d1,p1)],c2=tt[cid][SK(d2,p2)];if(!c1||!c2||c1.a===c2.a)continue;
@@ -703,6 +725,8 @@ function checkAll(S){const out=[],A=allocMap(S),C=classMap(S),T=teacherMap(S),L=
     const seen={};S.alloc.filter(a=>a.classId===c.id&&!a.fixed).forEach(a=>{const k=a.subject;if(seen[k])add('warn',`${c.name}: ${k} is added twice.`,'alloc:'+c.id);seen[k]=1;
       const ms=(+a.maxDay||+S.settings.maxSame||2);if(+a.ppw>nd*ms)add('err',`${c.name}: ${k} needs ${a.ppw} periods but max ${ms}/day × ${nd} days = ${nd*ms}.`,'alloc:'+c.id);
       if(!a.teacherId||!T[a.teacherId])add('err',`${c.name}: ${k} has no teacher.`,'alloc:'+c.id);
+      if(+a.dbl&&+a.dbl*2>+a.ppw)add('err',`${c.name}: ${k} has ${a.dbl} double periods but only ${a.ppw} periods.`,'alloc:'+c.id);
+      if(a.grp){const mem=S.alloc.filter(x=>x.grp===a.grp);if(mem.some(x=>x.teacherId!==a.teacherId||+x.ppw!==+a.ppw))add('err',`${c.name}: joined ${k} must have the same teacher and periods in all joined classes.`,'alloc:'+c.id);}
       if(a.s2&&!a.t2)add('err',`${c.name}: 2nd group ${a.s2} has no teacher.`,'alloc:'+c.id);
       if(a.s2&&a.t2&&a.t2===a.teacherId)add('err',`${c.name}: ${a.subject}/${a.s2} – both groups have the same teacher.`,'alloc:'+c.id);
       [[a.teacherId,a.subject],[a.t2,a.s2]].forEach(([tid,code])=>{const t=T[tid];if(t&&code&&(t.can||[]).length&&!t.can.includes(code))add('warn',`${t.name} is given ${code} in ${c.name} but it is not in the "can teach" list.`,'teachers');});
@@ -758,7 +782,7 @@ function freeTeachers(S,shift,d,p,exclude){
   const idx=busyIndex(S);exclude=exclude||new Set();
   return S.teachers.filter(t=>!exclude.has(t.id)&&!idx[t.id+'|'+shift+'|'+d+'|'+p]&&!(t.unavail||[]).includes(shift+'|'+d+'|'+p));
 }
-if(typeof module!=='undefined')module.exports={applyFixed,roomClashes,roomIndex,roomOf,roomName,sampleState,generate,clashes,placedCount,freeTeachers,busyIndex,teacherPlaced,subjLevel,posPen,spreadReport,checkAll,changeReport,maxWeekOf};
+if(typeof module!=='undefined')module.exports={applyFixed,roomClashes,roomIndex,roomOf,roomName,sampleState,generate,clashes,placedCount,freeTeachers,busyIndex,teacherPlaced,subjLevel,posPen,spreadReport,checkAll,changeReport,maxWeekOf,grpMembers,teacherLoad};
 
 </script>
 <script>
@@ -778,12 +802,12 @@ function fix(){S.adjust=S.adjust||{};S.rooms=S.rooms||[];S.theme=S.theme||'green
   if(!S.season)S.season={cur:'summer',auto:false,wFrom:'2026-11-01',wTo:'2027-02-28'};
   for(const k in S.shifts){const s=S.shifts[k];if(!s.times)s.times={summer:JSON.parse(JSON.stringify(s.periods)),winter:JSON.parse(JSON.stringify(s.periods))};}}
 let UNDO=[],LASTJ=null;
-const SEASONS={summer:'☀️ Summer timing',winter:'❄️ Winter timing'};
+const SEASONS={summer:'☀️ Summer timing',winter:'❄️ Winter timing',short:'⏱️ Short-day timing'};
 function fitLen(arr,n){arr=JSON.parse(JSON.stringify(arr||[]));while(arr.length>n)arr.pop();while(arr.length<n){const l=arr[arr.length-1]||['08:00','08:40'];arr.push([l[1],l[1]]);}return arr;}
 function syncSeason(){if(!S||!S.season)return;for(const k in S.shifts){const s=S.shifts[k];if(!s.times)continue;const n=s.periods.length;s.times[S.season.cur]=JSON.parse(JSON.stringify(s.periods));for(const o in s.times)if(o!==S.season.cur)s.times[o]=fitLen(s.times[o],n);}}
-function setSeason(x,quiet){if(!S.season||S.season.cur===x){return;}syncSeason();S.season.cur=x;for(const k in S.shifts){const s=S.shifts[k];if(s.times)s.periods=fitLen(s.times[x],s.periods.length);}
+function setSeason(x,quiet){if(!S.season||S.season.cur===x){return;}syncSeason();for(const k in S.shifts){const s=S.shifts[k];if(s.times&&!s.times[x])s.times[x]=JSON.parse(JSON.stringify(s.periods));}S.season.cur=x;for(const k in S.shifts){const s=S.shifts[k];if(s.times)s.periods=fitLen(s.times[x],s.periods.length);}
   if(!quiet){save();render(curView);toast(SEASONS[x]+' is now active');}}
-function seasonFor(ds){const se=S.season;if(!se)return 'summer';const md=ds.slice(5),f=(se.wFrom||'').slice(5),t=(se.wTo||'').slice(5);if(!f||!t)return se.cur;return (f<=t?(md>=f&&md<=t):(md>=f||md<=t))?'winter':'summer';}
+function seasonFor(ds){const se=S.season;if(!se)return 'summer';if((se.shortDays||[]).includes(ds))return 'short';const md=ds.slice(5),f=(se.wFrom||'').slice(5),t=(se.wTo||'').slice(5);if(!f||!t)return se.cur;return (f<=t?(md>=f&&md<=t):(md>=f||md<=t))?'winter':'summer';}
 function autoSeason(){if(S.season&&S.season.auto){const want=seasonFor(todayStr());if(want!==S.season.cur){setSeason(want,true);try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}}}
 const seasonTag=()=>S.season?SEASONS[S.season.cur]:'';
 function overlapWarn(){const sh=shifts();if(sh.length<2)return '';const a=S.shifts[sh[0]],b=S.shifts[sh[1]];if(!a.periods.length||!b.periods.length)return '';
@@ -957,6 +981,7 @@ function cancelSwap(){SWAP=null;$('swapBar').style.display='none';}
 function doSwap(cid,d1,p1,d2,p2){
   const tt=S.tt[cid]=S.tt[cid]||{},a=tt[SK(d1,p1)],b=tt[SK(d2,p2)];
   if((a&&a.fx)||(b&&b.fx)){toast('⭐ Fixed periods (Devotion) cannot be moved');render(curView);return;}
+  const AMx=A();if((a&&(AMx[a.a]||{}).grp)||(b&&(AMx[b.a]||{}).grp)){toast('🔗 Joined-class periods move together – change them with Auto Generate');render(curView);return;}
   const before=clashes(S).length+roomClashes(S).length;
   if(b)tt[SK(d1,p1)]={a:b.a,l:1};else delete tt[SK(d1,p1)];
   if(a)tt[SK(d2,p2)]={a:a.a,l:1};else delete tt[SK(d2,p2)];
@@ -1089,9 +1114,10 @@ function ttTable(mode,id,print){
         items.forEach(it=>{const sb=subj(mode==='teacher'?tSub(it.a,id):it.a.subject),t={name:TM[it.a.teacherId]?aTNames(it.a):''};
           const clash=clashOf(idx,it.a,sh,d,p);
           const absent=adj&&(mode==='teacher'?adj.absent.includes(id):TIDS(it.a).some(x=>adj.absent.includes(x)));const subT=absent?TM[(adj.subs||{})[it.cid+'|'+p]]:null;
-          if(mode==='teacher')inner+=tc({title:sb.name,l1:(CM[it.cid]||{}).name,l2:absent?('Absent'+(subT?' · covered by '+subT.name:'')):shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,abs:absent,lock:it.l&&!print});
+          const jn=it.a.grp?grpMembers(S,it.a).map(x=>(CM[x.classId]||{}).name).filter(Boolean):null;
+          if(mode==='teacher')inner+=tc({title:sb.name+(it.a.dbl?' ⏸':''),l1:jn?'🔗 '+jn.join(' + '):(CM[it.cid]||{}).name,l2:absent?('Absent'+(subT?' · covered by '+subT.name:'')):shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,abs:absent,lock:it.l&&!print});
           else if(absent)inner+=tc({title:aName(it.a),subst:1,l1:subT?subT.name:'No substitute yet',l2:mode==='room'?(CM[it.cid]||{}).name:shortRoom(it.cid,it.a),color:sb.color});
-          else inner+=tc({title:(it.a.fixed?'⭐ ':'')+(mode==='room'?sb.name:aName(it.a)),l1:mode==='room'?(CM[it.cid]||{}).name+' · '+(t.name||''):(t.name||(it.a.fixed?'Whole school':'')),l2:mode==='room'?'':shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,lock:it.l&&!print});});
+          else inner+=tc({title:(it.a.fixed?'⭐ ':'')+(mode==='room'?sb.name:aName(it.a))+(jn&&mode!=='room'?' 🔗 '+jn.filter(n=>n!==(CM[it.cid]||{}).name).join(', '):''),l1:mode==='room'?(CM[it.cid]||{}).name+' · '+(t.name||''):(t.name||(it.a.fixed?'Whole school':'')),l2:mode==='room'?'':shortRoom(it.cid,it.a),color:sb.color,type:typeOf(it.a),clash,lock:it.l&&!print});});
         if(mode==='teacher'&&adj){Object.entries(adj.subs||{}).forEach(([k,v])=>{if(v!==id)return;const [cid,pp]=k.split('|');if(+pp!==p||!CM[cid]||CM[cid].shift!==sh)return;const cell=(S.tt[cid]||{})[SK(d,p)];const a=cell&&AM[cell.a];if(!a)return;
           inner+=tc({title:subj(a.subject).name,subst:1,l1:CM[cid].name+' (for '+((TM[a.teacherId]||{}).abbr||'')+')',l2:shortRoom(cid,a),color:subj(a.subject).color});});}
         if(!inner)inner=mode==='teacher'?'<div class="tc free">Free</div>':'<div class="tc empty">—</div>';
@@ -1260,6 +1286,14 @@ async function copyText(t){try{await navigator.clipboard.writeText(t);toast('�
 function copyWA(){const t=waMessage();if(!t){toast('Nothing to copy');return;}copyText(t);}
 
 /* ---- generate ---- */
+function joinDlg(aid){const a=S.alloc.find(x=>x.id===aid);if(!a)return;const c=C()[a.classId],dis=isAdmin?'':'disabled';const inG=new Set(grpMembers(S,a).map(x=>x.classId));
+  modal(`<h3>🔗 Join classes – ${esc(subj(a.subject).name)}</h3><p class="muted">${esc((T()[a.teacherId]||{}).name||'')} teaches ${esc(c.name)} together with the ticked classes in the same period (e.g. XI-A + XI-B for Music). The joined classes get this subject, teacher and ${a.ppw} periods/week.</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px">${S.classes.filter(x=>x.id!==c.id&&x.shift===c.shift).map(x=>`<label style="flex-direction:row;gap:6px;align-items:center;color:var(--ink)"><input type="checkbox" ${dis} class="jnk" value="${x.id}" ${inG.has(x.id)?'checked':''}> ${esc(x.name)}</label>`).join('')}</div><div class="row" style="margin-top:10px">${isAdmin?`<button class="btn" onclick="saveJoin('${aid}')">Save</button>`:''}<button class="btn sec" onclick="closeModal()">Close</button></div>`);}
+function saveJoin(aid){const a=S.alloc.find(x=>x.id===aid);const sel=[...document.querySelectorAll('.jnk:checked')].map(x=>x.value);
+  const g=a.grp||uid();S.alloc.forEach(x=>{if(x.grp===g&&x.id!==a.id&&!sel.includes(x.classId))delete x.grp;});
+  sel.forEach(cid=>{let m=S.alloc.find(x=>x.classId===cid&&!x.fixed&&x.subject===a.subject);if(!m){m={id:uid(),classId:cid,subject:a.subject};S.alloc.push(m);}Object.assign(m,{teacherId:a.teacherId,ppw:a.ppw,dbl:a.dbl||0,grp:g});delete m.s2;delete m.t2;});
+  if(sel.length)a.grp=g;else delete a.grp;
+  logAct(`Joined ${subj(a.subject).name}: ${[a.classId,...sel].map(x=>(C()[x]||{}).name).join(' + ')}`);save();closeModal();renderSetup();toast(sel.length?'🔗 Classes joined – run Auto Generate':'Join removed');}
+function addShortDay(){const v=$('sdNew').value;if(!v){toast('Choose a date');return;}S.season.shortDays=[...new Set([...(S.season.shortDays||[]),v])];logAct('Short day added: '+fmtDate(v));save();autoSeason();renderSetup();toast('⏱️ Short day added');}
 function renderCheck(){const el=$('gCheck');if(!el)return;const L=checkAll(S),e=L.filter(x=>x.lvl==='err'),w=L.filter(x=>x.lvl==='warn');
   const link=x=>x.where.startsWith('alloc:')?`<a href="#setup" onclick="setupTab='alloc';allocCls='${x.where.slice(6)}';go('setup');return false">Fix</a>`:x.where==='teachers'?`<a href="#setup" onclick="setupTab='teachers';go('setup');return false">Fix</a>`:x.where==='backup'?`<a href="#backup" onclick="go('backup');return false">Fix</a>`:'';
   el.innerHTML=`<div class="card"><h3>${e.length?'⛔':'✅'} Check before generate</h3>${!L.length?'<p class="note ok">Everything looks right. You can generate.</p>':''}${e.length?`<p class="muted">Must fix (${e.length}):</p><ul>${e.map(x=>`<li style="color:#b91c1c">${esc(x.msg)} ${link(x)}</li>`).join('')}</ul>`:''}${w.length?`<details ${e.length?'':'open'}><summary class="muted">Warnings (${w.length}) – routine can still be made</summary><ul>${w.map(x=>`<li>${esc(x.msg)} ${link(x)}</li>`).join('')}</ul></details>`:''}</div>`;}
@@ -1322,11 +1356,13 @@ function renderSetup(){
     const se=S.season;
     h+=`<div class="card" style="border-left:5px solid ${se.cur==='winter'?'#3b82f6':'#f59e0b'}"><h3>☀️ Summer / ❄️ Winter timing</h3>
      <p class="muted" style="margin-top:0">Both seasons use the same periods, breaks and routine. Only the times are different. The timings below are for the season selected here.</p>
-     <div class="row"><div class="seg">${['summer','winter'].map(x=>`<button class="${se.cur===x?'act':''}" ${isAdmin?`onclick="setSeason('${x}')"`:'disabled'}>${SEASONS[x]}</button>`).join('')}</div>
+     <div class="row"><div class="seg">${['summer','winter','short'].map(x=>`<button class="${se.cur===x?'act':''}" ${isAdmin?`onclick="setSeason('${x}')"`:'disabled'}>${SEASONS[x]}</button>`).join('')}</div>
      <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" ${dis} ${se.auto?'checked':''} onchange="S.season.auto=this.checked;save();autoSeason();renderSetup()"> Switch automatically by date</label>
      <label>Winter from<input type="date" ${dis} value="${se.wFrom}" onchange="S.season.wFrom=this.value;save();autoSeason();renderSetup()"></label>
      <label>Winter to<input type="date" ${dis} value="${se.wTo}" onchange="S.season.wTo=this.value;save();autoSeason();renderSetup()"></label></div>
-     <div class="note ${se.cur==='winter'?'':'ok'}" style="margin:0">Now showing and editing: <b>${SEASONS[se.cur]}</b>${se.auto?' (chosen automatically for today)':''}</div></div>`+overlapWarn();
+     <div class="note ${se.cur==='winter'?'':'ok'}" style="margin:0">Now showing and editing: <b>${SEASONS[se.cur]}</b>${se.auto?' (chosen automatically for today)':''}</div>
+     <div class="row" style="margin-top:8px"><span class="muted">⏱️ Short days (half day, exam day, programme day) use the short-day timing with the same routine:</span>${(se.shortDays||[]).sort().map(d=>`<span class="pill">${fmtDate(d)}${isAdmin?` <a href="#" onclick="S.season.shortDays=S.season.shortDays.filter(x=>x!=='${d}');save();autoSeason();renderSetup();return false">✕</a>`:''}</span>`).join('')}${isAdmin?`<input type="date" id="sdNew"><button class="btn sm" onclick="addShortDay()">+ Add short day</button>`:''}</div>
+     <p class="muted" style="margin:4px 0 0">Tip: click ⏱️ Short-day timing above and set the shorter times once. Turn on “Switch automatically by date” so the app uses them on those dates.</p></div>`+overlapWarn();
     h+=`<div class="card"><h3>Working days ${isAdmin?'<button class="btn sm sec" onclick="resetDays()" style="float:right">↺ Mon–Fri default</button>':''}</h3><div class="row">${DAY_NAMES.map((n,i)=>`<label style="flex-direction:row;gap:5px;color:var(--ink)"><input type="checkbox" ${dis} ${S.days.includes(i)?'checked':''} onchange="toggleDay(${i},this.checked)"> ${n}</label>`).join('')}</div></div>`;
     shifts().forEach(sh=>{const s=S.shifts[sh];
       h+=`<div class="card"><h3>${esc(s.name)}</h3><div class="row"><label>Shift name<input type="text" ${dis} value="${esc(s.name)}" onchange="S.shifts['${sh}'].name=this.value;save()"></label>
@@ -1358,7 +1394,7 @@ function renderSetup(){
       const L=teacherLoad(S);
       h+=`<div class="card"><div class="row"><label>Class<select onchange="allocCls=this.value;renderSetup()">${S.classes.map(x=>`<option value="${x.id}" ${x.id===allocCls?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label>${(()=>{const p=cPer(allocCls);return `<span class="pill ${p.cls}">Subjects: ${p.sub} of ${p.free} periods/week</span>${p.fx?`<span class="pill">⭐ ${p.fx} fixed (Devotion/Games) · ${p.sl} in the week</span>`:''}`;})()}
       ${isAdmin?`<label>Copy subjects from<select id="cpFrom"><option value="">—</option>${S.classes.filter(x=>x.id!==allocCls).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><button class="btn sm sec" onclick="copyAlloc()">Copy</button>`:''}</div>
-      <div class="tw"><table class="list"><tr><th>Subject</th><th>Teacher</th><th>Same period, 2nd group<br><span style="font-weight:400;font-size:11px">(e.g. Bengali with Mizo – optional)</span></th><th>Periods/week</th><th>Max/day</th><th>Room</th><th></th></tr>`+al.filter(a=>!a.fixed).map(a=>`<tr><td><select ${dis} onchange="updAlloc('${a.id}','subject',this.value)">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===a.subject?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','teacherId',this.value)">${tOpts(a.teacherId,a.subject,L)}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','s2',this.value)"><option value="">— none —</option>${S.subjects.filter(s=>!s.fixed).map(s=>`<option value="${esc(s.code)}" ${s.code===a.s2?'selected':''}>${esc(s.name)}</option>`).join('')}</select>${a.s2?`<select ${dis} style="margin-top:4px" onchange="updAlloc('${a.id}','t2',this.value)"><option value="">— choose teacher —</option>${tOpts(a.t2,a.s2,L)}</select><select ${dis} style="margin-top:4px" title="Room for the 2nd group" onchange="updAlloc('${a.id}','room2',this.value)">${roomOpts(a.room2||'','2nd group room: not set')}</select>`:''}</td><td><input type="number" ${dis} min="0" max="20" style="width:70px" value="${a.ppw}" onchange="updAlloc('${a.id}','ppw',+this.value)"></td><td><input type="number" ${dis} min="0" max="5" style="width:64px" placeholder="auto" value="${a.maxDay||''}" onchange="updAlloc('${a.id}','maxDay',+this.value||0)"></td><td><select ${dis} onchange="updAlloc('${a.id}','room',this.value)">${roomOpts(a.room,'Class room')}</select></td><td>${isAdmin?`<button class="btn sm red" onclick="delAlloc('${a.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addAlloc()">+ Add subject to class</button></div>':''}<p class="muted">Teacher's total load is shown in brackets. Changing allocation does not change the routine until you place it or run Auto Generate.</p>${al.filter(a=>a.fixed).map(a=>`<p class="muted">⭐ Fixed: <b>${esc(subj(a.subject).name)}</b> – ${a.ppw} period(s)/week (change in <a href="#setup" onclick="setupTab='fixed'">Devotion / Fixed</a>)</p>`).join('')}</div>`;}
+      <div class="tw"><table class="list"><tr><th>Subject</th><th>Teacher</th><th>Same period, 2nd group<br><span style="font-weight:400;font-size:11px">(e.g. Bengali with Mizo – optional)</span></th><th>Periods/week</th><th>Double</th><th>Join classes</th><th>Max/day</th><th>Room</th><th></th></tr>`+al.filter(a=>!a.fixed).map(a=>`<tr><td><select ${dis} onchange="updAlloc('${a.id}','subject',this.value)">${S.subjects.map(s=>`<option value="${esc(s.code)}" ${s.code===a.subject?'selected':''}>${esc(s.name)}</option>`).join('')}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','teacherId',this.value)">${tOpts(a.teacherId,a.subject,L)}</select></td><td><select ${dis} onchange="updAlloc('${a.id}','s2',this.value)"><option value="">— none —</option>${S.subjects.filter(s=>!s.fixed).map(s=>`<option value="${esc(s.code)}" ${s.code===a.s2?'selected':''}>${esc(s.name)}</option>`).join('')}</select>${a.s2?`<select ${dis} style="margin-top:4px" onchange="updAlloc('${a.id}','t2',this.value)"><option value="">— choose teacher —</option>${tOpts(a.t2,a.s2,L)}</select><select ${dis} style="margin-top:4px" title="Room for the 2nd group" onchange="updAlloc('${a.id}','room2',this.value)">${roomOpts(a.room2||'','2nd group room: not set')}</select>`:''}</td><td><input type="number" ${dis} min="0" max="20" style="width:70px" value="${a.ppw}" onchange="updAlloc('${a.id}','ppw',+this.value)"></td><td><input type="number" ${dis} min="0" max="4" style="width:56px" title="Double periods per week (two periods together, e.g. practical)" value="${a.dbl||0}" onchange="updAlloc('${a.id}','dbl',+this.value)"></td><td><button class="btn sm sec" ${a.s2?'disabled title="Not for 2-group subjects"':''} onclick="joinDlg('${a.id}')">🔗 ${a.grp?grpMembers(S,a).filter(x=>x.id!==a.id).map(x=>esc((C()[x.classId]||{}).name)).join(', '):'Join'}</button></td><td><input type="number" ${dis} min="0" max="5" style="width:64px" placeholder="auto" value="${a.maxDay||''}" onchange="updAlloc('${a.id}','maxDay',+this.value||0)"></td><td><select ${dis} onchange="updAlloc('${a.id}','room',this.value)">${roomOpts(a.room,'Class room')}</select></td><td>${isAdmin?`<button class="btn sm red" onclick="delAlloc('${a.id}')">✕</button>`:''}</td></tr>`).join('')+`</table></div>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addAlloc()">+ Add subject to class</button></div>':''}<p class="muted">Teacher's total load is shown in brackets. Changing allocation does not change the routine until you place it or run Auto Generate.</p>${al.filter(a=>a.fixed).map(a=>`<p class="muted">⭐ Fixed: <b>${esc(subj(a.subject).name)}</b> – ${a.ppw} period(s)/week (change in <a href="#setup" onclick="setupTab='fixed'">Devotion / Fixed</a>)</p>`).join('')}</div>`;}
   }
   if(setupTab==='fixed'){
     const res=applyFixed(S);
@@ -1425,7 +1461,7 @@ function delClass(id){ask(`Delete class ${esc(C()[id].name)} with its routine?`,
 function removeAlloc(aid){S.alloc=S.alloc.filter(a=>a.id!==aid);for(const c in S.tt)for(const k in S.tt[c])if(S.tt[c][k].a===aid)delete S.tt[c][k];}
 function addAlloc(){S.alloc.push({id:uid(),classId:allocCls,subject:(S.subjects[0]||{}).code||'',teacherId:(S.teachers[0]||{}).id||'',ppw:1});save();renderSetup();}
 function delAlloc(aid){removeAlloc(aid);save();renderSetup();}
-function updAlloc(aid,f,v){const a=S.alloc.find(x=>x.id===aid);if(!a)return;a[f]=v;{const tn=x=>(T()[x]||{}).name||x;logAct(`Allocation ${(C()[a.classId]||{}).name} ${a.subject}: ${({teacherId:'teacher → '+tn(v),t2:'2nd teacher → '+tn(v),ppw:'periods → '+v,s2:'2nd group → '+(v||'none'),room:'room changed',room2:'2nd room changed',subject:'subject → '+v,maxDay:'max/day → '+v})[f]||f}`);}if(f==='s2'&&!v)a.t2='';
+function updAlloc(aid,f,v){const a=S.alloc.find(x=>x.id===aid);if(!a)return;a[f]=v;if(a.grp&&['teacherId','ppw','dbl','subject','maxDay'].includes(f))S.alloc.forEach(x=>{if(x.grp===a.grp)x[f]=v;});{const tn=x=>(T()[x]||{}).name||x;logAct(`Allocation ${(C()[a.classId]||{}).name} ${a.subject}: ${({teacherId:'teacher → '+tn(v),t2:'2nd teacher → '+tn(v),ppw:'periods → '+v,s2:'2nd group → '+(v||'none'),room:'room changed',room2:'2nd room changed',subject:'subject → '+v,maxDay:'max/day → '+v})[f]||f}`);}if(f==='s2'&&!v)a.t2='';
   if(f==='s2'&&v){const dup=S.alloc.find(x=>x.id!==aid&&x.classId===a.classId&&!x.fixed&&x.subject===v);if(dup){if(!a.t2)a.t2=dup.teacherId;removeAlloc(dup.id);toast('Separate '+subj(v).name+' row removed – it now shares the period');}}
   if(f==='ppw'){const pl=[];for(const k in S.tt[a.classId]||{})if(S.tt[a.classId][k].a===aid)pl.push(k);while(pl.length>v){delete S.tt[a.classId][pl.pop()];}}
   save();renderSetup();}
