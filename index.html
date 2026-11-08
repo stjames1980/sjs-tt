@@ -11,6 +11,19 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>SJS Time Table Software 2026-27</title>
 <style>
+/* ================= PRINT SETTINGS – MASTER ROUTINE =================
+   Change the numbers below to adjust the Master Routine printout.
+   (After changing, commit on GitHub and reload the app with Ctrl+F5.) */
+:root{
+ --pClassW:86px;        /* width of the first "Class" column        */
+ --pClassFont:17px;     /* class name, e.g. VI-A                    */
+ --pRoomFont:11px;      /* room under the class, e.g. Room 18       */
+ --pSubjFont:15px;      /* subject in SHORT mode (MAT)              */
+ --pSubjFullFont:13.5px;/* subject in FULL mode (Mathematics)       */
+ --pTeacherFont:11.5px; /* teacher name / short form                */
+}
+/* =================================================================== */
+
 body[data-theme=green]{--navy:#15803d;--navy2:#16a34a;--tint:#ecfdf3;--bg:#f5f7f6}
 body[data-theme=purple]{--navy:#6d28d9;--navy2:#7c3aed;--tint:#f3effe}
 :root{--tint:#eef2fa;--navy:#12305e;--navy2:#1c4489;--gold:#d4a017;--bg:#f3f5f9;--card:#fff;--ink:#1b2333;--mut:#6b7488;--line:#e2e6ee;--red:#c62828;--green:#1b8a4b;--amber:#c77700;--r:12px}
@@ -197,7 +210,31 @@ body.measuring #printArea table.list th{background:var(--navy)!important;color:#
 body.measuring #printArea table.list td{border:1px solid #cbd5e1!important;padding:4px 6px}
 body.measuring #printArea .pleg{flex:0 0 auto;font-size:10.5px;line-height:1.35;margin:4px 0 0;color:#1e293b;columns:3;column-gap:14px}
 body.measuring #printArea .pleg b{color:var(--navy)}
+body.measuring #printArea table:not(.ttg):not(.list){border-spacing:1.5px}
+body.measuring #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW)}
+body.measuring #printArea table:not(.ttg):not(.list) td.day{padding:1px 5px!important;font-size:var(--pClassFont);line-height:1.05;white-space:normal}
+body.measuring #printArea table:not(.ttg):not(.list) td.day span{font-size:var(--pRoomFont)!important;font-weight:600;white-space:nowrap}
+body.measuring #printArea table:not(.ttg):not(.list) th{padding:3px 1px}
+body.measuring #printArea .cell{padding:1px 3px!important;line-height:1.08}
+body.measuring #printArea table:not(.ttg):not(.list) td{height:1px}
+ #printArea table:not(.ttg):not(.list) td{height:1px}
+body.measuring #printArea .cell .s{font-size:var(--pSubjFont)}
+body.measuring #printArea .cell .fn{font-size:var(--pSubjFullFont)!important;line-height:1.05}
+body.measuring #printArea .cell .t{font-size:var(--pTeacherFont);line-height:1.08}
+body.measuring #printArea .cell .t .ab,body.measuring #printArea .cell .s .ab{font-size:10px}
+body.measuring #printArea .cell>div:empty,body.measuring #printArea .cell .lock{display:none}
  #printArea .lock{display:none!important}
+ #printArea table:not(.ttg):not(.list){border-spacing:1.5px}
+ #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW)}
+ #printArea table:not(.ttg):not(.list) td.day{padding:1px 5px!important;font-size:var(--pClassFont);line-height:1.05;white-space:normal}
+ #printArea table:not(.ttg):not(.list) td.day span{font-size:var(--pRoomFont)!important;font-weight:600;white-space:nowrap}
+ #printArea table:not(.ttg):not(.list) th{padding:3px 1px}
+ #printArea .cell{padding:1px 3px!important;line-height:1.08}
+ #printArea .cell .s{font-size:var(--pSubjFont)}
+ #printArea .cell .fn{font-size:var(--pSubjFullFont)!important;line-height:1.05}
+ #printArea .cell .t{font-size:var(--pTeacherFont);line-height:1.08}
+ #printArea .cell .t .ab,#printArea .cell .s .ab{font-size:10px}
+ #printArea .cell>div:empty,#printArea .cell .lock{display:none}
 body.measuring #printArea .sig{flex:0 0 auto;margin-top:auto!important;display:flex!important;justify-content:space-between;align-items:flex-end;padding-top:6px;font-size:12px;color:#334155}
 body.measuring #printArea .sig .sl{min-width:180px;text-align:center;border-top:1.5px solid #334155;padding-top:2px;font-weight:700}
 body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:center}
@@ -1930,12 +1967,12 @@ const sig=()=>`<div class="sig"><span class="sl">Time Table In-charge</span><spa
 function fitPages(){/* fit every sheet to one A4 landscape page: shrink if too big, then stretch rows to fill the page */
   const pa=$('printArea');document.body.classList.add('measuring');pa.style.cssText='display:block;position:absolute;left:-9999px;top:0';
   pa.querySelectorAll('.pg').forEach(pg=>{const tabs=[...pg.querySelectorAll(':scope>.tw>table,:scope>table')];
-    pg.style.zoom='';pg.style.height='auto';pg.style.width='';tabs.forEach(t=>[...t.rows].forEach(r=>r.style.height=''));
+    pg.style.zoom='';pg.style.height='auto';pg.style.width='';tabs.forEach(t=>{t.style.height='';[...t.rows].forEach(r=>r.style.height='')});
     const W=pg.getBoundingClientRect().width,H=W*199/287;const h=pg.scrollHeight,w=pg.scrollWidth;
-    const grow=[];tabs.forEach(t=>[...t.rows].forEach((r,i)=>{if(i===0||r.classList.contains('brow'))return;grow.push([r,r.getBoundingClientRect().height]);}));
+    const th=tabs.map(t=>t.getBoundingClientRect().height),tsum=th.reduce((a,b)=>a+b,0)||1;
     let zz=1;if(h>H||w>W+2)zz=Math.max(0.2,Math.min(H/h,W/w)*0.97);
     const spare=(H*0.985)/zz-h-4;
-    if(spare>0&&grow.length){const add=spare/grow.length;grow.forEach(([r,rh])=>r.style.height=(rh+add).toFixed(1)+'px');}
+    if(spare>0)tabs.forEach((t,i)=>{[...t.rows].forEach((r,k)=>{if(k===0||r.classList.contains('brow'))r.style.height=r.getBoundingClientRect().height.toFixed(1)+'px';});t.style.height=(th[i]+spare*th[i]/tsum).toFixed(1)+'px';});
     if(zz<1){pg.style.zoom=zz.toFixed(3);pg.style.height=(198/zz).toFixed(1)+'mm';pg.style.width=(287/zz).toFixed(1)+'mm';}else pg.style.height='';});
   pa.style.cssText='';document.body.classList.remove('measuring');}
 function doPrint(html){$('printArea').innerHTML=html;try{fitPages();}catch(e){}try{window.print();}catch(e){}setTimeout(()=>toast('If the print window did not open, open this app file directly in Chrome and print from there.'),900);}
