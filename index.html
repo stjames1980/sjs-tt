@@ -15,16 +15,16 @@
    Change the numbers below to adjust the Master Routine printout.
    (After changing, commit on GitHub and reload the app with Ctrl+F5.) */
 :root{
- --pClassW:100px;        /* width of the first "Class" column        */
+ --pClassW:86px;        /* width of the first "Class" column        */
  --pClassLeft:12px;     /* space before the class name (bigger = more to the right) */
  --pClassAlign:left;    /* left, center or right                     */
+ --pClassHeadAlign:center; /* the heading word "Class": left, center or right */
  --pClassFont:17px;     /* class name, e.g. VI-A                    */
  --pRoomFont:11px;      /* room under the class, e.g. Room 18       */
  --pSubjFont:15px;      /* subject in SHORT mode (MAT)              */
  --pSubjFullFont:13.5px;/* subject in FULL mode (Mathematics)       */
  --pTeacherFont:11.5px; /* teacher name / short form                */
 }
-      #printArea table:not(.ttg):not(.list) tr:first-child th:first-child,body.measuring #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{text-align:center!important}
 /* =================================================================== */
 
 body[data-theme=green]{--navy:#15803d;--navy2:#16a34a;--tint:#ecfdf3;--bg:#f5f7f6}
@@ -214,7 +214,7 @@ body.measuring #printArea table.list td{border:1px solid #cbd5e1!important;paddi
 body.measuring #printArea .pleg{flex:0 0 auto;font-size:10.5px;line-height:1.35;margin:4px 0 0;color:#1e293b;columns:3;column-gap:14px}
 body.measuring #printArea .pleg b{color:var(--navy)}
 body.measuring #printArea table:not(.ttg):not(.list){border-spacing:1.5px}
-body.measuring #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW)}
+body.measuring #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW);text-align:var(--pClassHeadAlign)!important;padding-left:var(--pClassLeft)!important}
 body.measuring #printArea table:not(.ttg):not(.list) td.day{padding:1px 4px 1px var(--pClassLeft)!important;text-align:var(--pClassAlign);font-size:var(--pClassFont);line-height:1.05;white-space:normal}
 body.measuring #printArea table:not(.ttg):not(.list) td.day span{font-size:var(--pRoomFont)!important;font-weight:600;white-space:nowrap}
 body.measuring #printArea table:not(.ttg):not(.list) th{padding:3px 1px}
@@ -228,7 +228,7 @@ body.measuring #printArea .cell .t .ab,body.measuring #printArea .cell .s .ab{fo
 body.measuring #printArea .cell>div:empty,body.measuring #printArea .cell .lock{display:none}
  #printArea .lock{display:none!important}
  #printArea table:not(.ttg):not(.list){border-spacing:1.5px}
- #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW)}
+ #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW);text-align:var(--pClassHeadAlign)!important;padding-left:var(--pClassLeft)!important}
  #printArea table:not(.ttg):not(.list) td.day{padding:1px 4px 1px var(--pClassLeft)!important;text-align:var(--pClassAlign);font-size:var(--pClassFont);line-height:1.05;white-space:normal}
  #printArea table:not(.ttg):not(.list) td.day span{font-size:var(--pRoomFont)!important;font-weight:600;white-space:nowrap}
  #printArea table:not(.ttg):not(.list) th{padding:3px 1px}
@@ -329,6 +329,7 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
  <div class="sp"></div>
  <button class="hbtn" id="installBtn" style="display:none" onclick="installApp()">📲 Install</button>
  <button class="hbtn" id="undoTop" style="display:none" onclick="undoLast()">↶ Undo</button>
+ <button class="hbtn" id="cloudBtn" onclick="go('backup');setTimeout(()=>{const c=$('cloudCard');c&&c.scrollIntoView({behavior:'smooth'})},150)" title="Online saving">☁️ Cloud</button>
  <button class="hbtn" id="adminBtn" onclick="adminToggle()">🔒 Admin</button>
 </header>
 <div class="wrap">
@@ -544,6 +545,10 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
 <!-- BACKUP -->
 <section class="view" id="v-backup">
  <h2>Backup &amp; Export</h2><p class="sub">Keep a backup file after every big change.</p>
+ <div class="card" id="cloudCard"><h3>☁️ Online saving (cloud)</h3>
+  <p class="muted">Sign in once with the Admin email. After that every change is saved online by itself, and you can open the same timetable on any computer or phone. A copy is also kept for every day (last 30 days).</p>
+  <div id="cloudBox">Loading…</div>
+ </div>
  <div class="card"><h3>Backup</h3>
   <div class="row"><button class="btn" onclick="dlBackup()">⬇️ Download backup (.json)</button><button class="btn sec" onclick="copyBackup()">📋 Copy backup text</button></div>
   <div class="row"><label>Restore from file<input type="file" accept=".json,application/json" onchange="restoreFile(this)"></label></div>
@@ -1075,7 +1080,7 @@ const seasonTag=()=>S.season?SEASONS[S.season.cur]:'';
 function overlapWarn(){const sh=shifts();if(sh.length<2)return '';const a=S.shifts[sh[0]],b=S.shifts[sh[1]];if(!a.periods.length||!b.periods.length)return '';
   const aEnd=a.periods[a.periods.length-1][1],bStart=b.periods[0][0],bEnd=b.periods[b.periods.length-1][1],aStart=a.periods[0][0];
   if(aEnd>bStart&&bEnd>aStart)return `<div class="note err">⚠️ ${esc(a.name)} ends at ${t12(aEnd)} but ${esc(b.name)} starts at ${t12(bStart)}. Teachers who teach in both shifts may get two classes at the same time. Make the morning shift end before the noon shift starts.</div>`;return '';}
-function save(){syncSeason();try{applyFixed(S);}catch(e){}const now=JSON.stringify(S);if(LASTJ&&now!==LASTJ){UNDO.push(LASTJ);if(UNDO.length>40)UNDO.shift();}LASTJ=now;try{localStorage.setItem(LS,now);}catch(e){}updUndo();}
+function save(){syncSeason();try{applyFixed(S);}catch(e){}const now=JSON.stringify(S);if(LASTJ&&now!==LASTJ){UNDO.push(LASTJ);if(UNDO.length>40)UNDO.shift();}const chg=now!==LASTJ;LASTJ=now;try{localStorage.setItem(LS,now);}catch(e){}updUndo();if(chg&&typeof cloudQueue==='function')cloudQueue();}
 function updUndo(){const b=$('undoTop');if(b){b.style.display=isAdmin?'inline-block':'none';b.disabled=!UNDO.length;b.style.opacity=UNDO.length?1:.45;}}
 function undoLast(){if(!needAdmin())return;if(!UNDO.length){toast('Nothing to undo');return;}const j=UNDO.pop();S=JSON.parse(j);fix();LASTJ=JSON.stringify(S);try{localStorage.setItem(LS,LASTJ);}catch(e){}refreshHeader();render(curView);updUndo();toast('↶ Undone ('+UNDO.length+' more step'+(UNDO.length===1?'':'s')+' available)');}
 function resetShift(sh){if(!needAdmin())return;const def=sampleState().shifts[sh];if(!def){toast('No default for this shift');return;}
@@ -1110,7 +1115,7 @@ function go(v){if(v==='class'||v==='teacher'||v==='rooms'){TV.mode=v==='rooms'?'
 function toggleNav(){$('nav').classList.toggle('open');}
 document.querySelectorAll('nav a[data-v],#bnav a[data-v]').forEach(a=>a.onclick=()=>{if(a.dataset.tab)setupTab=a.dataset.tab;go(a.dataset.v);});
 window.addEventListener('hashchange',()=>go(location.hash.slice(1)));
-function render(v){({home:renderHome,class:renderClass,teacher:renderTeacher,master:renderMaster,free:renderFree,adjust:renderAdjustView,generate:renderGenerate,create:renderCreate,timetable:renderTT,workload:renderWorkload,print:fillPC,setup:renderSetup,reports:renderReports,backup:()=>{renderVersions();$('themeSel').value=S.theme||'green';$('hSel').value=S.settings.h24?'24':'12';},help:()=>{}}[v]||(()=>{}))();}
+function render(v){({home:renderHome,class:renderClass,teacher:renderTeacher,master:renderMaster,free:renderFree,adjust:renderAdjustView,generate:renderGenerate,create:renderCreate,timetable:renderTT,workload:renderWorkload,print:fillPC,setup:renderSetup,reports:renderReports,backup:()=>{renderVersions();try{drawCloud();}catch(e){}$('themeSel').value=S.theme||'green';$('hSel').value=S.settings.h24?'24':'12';},help:()=>{}}[v]||(()=>{}))();}
 function refreshHeader(){$('hName').textContent=S.school.name;$('hSub').textContent='Time Table Software · '+S.school.session;document.title=S.school.name+' – Time Table '+S.school.session;}
 
 /* ---- admin ---- */
@@ -2019,7 +2024,68 @@ try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)&&!/clau
 function fillPC(){const ms=$('pcMS');if(ms){const v=ms.value;ms.innerHTML=shifts().map(sh=>`<option value="${sh}">${esc(S.shifts[sh].name)}</option>`).join('')+(shifts().length>1?'<option value="all">Morning + Noon (both)</option>':'');if(v)ms.value=v;else ms.value=shifts().includes('N')?'N':shifts()[0];
   const md=$('pcMD'),dv=md.value;md.innerHTML='<option value="all">All days</option>'+S.days.map(d=>`<option value="${d}">${DAY_NAMES[d]}</option>`).join('');md.value=dv||'all';$('pcMN').value=MNAME;}
   fillSel($('pcC'),S.classes.map(c=>[c.id,c.name+(clsRoom(c)?' ('+clsRoom(c)+')':'')]),$('pcC').value);fillSel($('pcT'),S.teachers.map(t=>[t.id,t.name]),$('pcT').value);fillSel($('pcR'),roomList(),$('pcR').value);}
+
+/* ================= CLOUD SAVING (Firebase – project sjs-timetable) ================= */
+const FB_CFG={apiKey:"AIzaSyD5nDjNVJrb9ePPq5SIC7tiqAdhYXogbOo",authDomain:"sjs-timetable.firebaseapp.com",projectId:"sjs-timetable",storageBucket:"sjs-timetable.firebasestorage.app",messagingSenderId:"352312773603",appId:"1:352312773603:web:ab84f9b0019c03c39e6ed6"};
+const CL={ready:false,user:null,db:null,auth:null,state:'off',msg:'',lastAt:0,rev:0,dirty:false,timer:null,unsub:null,applying:false,
+  dev:(()=>{try{let d=localStorage.getItem('sjs_tt_dev');if(!d){d='d'+Math.random().toString(36).slice(2,9);localStorage.setItem('sjs_tt_dev',d);}return d;}catch(e){return 'd'+Date.now();}})()};
+try{CL.rev=+(localStorage.getItem('sjs_tt_cloudrev')||0);}catch(e){}
+function clSet(state,msg){CL.state=state;CL.msg=msg||'';const b=$('cloudBtn');if(b){const ic={off:'☁️ Cloud',signedout:'☁️ Sign in',saving:'⏳ Saving…',saved:'☁️ Saved',offline:'⚠️ Offline',error:'⚠️ Cloud',wait:'☁️ …'}[state]||'☁️';b.textContent=ic;b.title=msg||'Online saving';}drawCloud();}
+function loadJs(src){return new Promise((ok,bad)=>{const sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=bad;document.head.appendChild(sc);});}
+async function cloudInit(){if(CL.ready||CL.loading)return;CL.loading=true;clSet('wait','Connecting…');
+  try{const v='10.12.2',b='https://www.gstatic.com/firebasejs/'+v+'/';await loadJs(b+'firebase-app-compat.js');await loadJs(b+'firebase-auth-compat.js');await loadJs(b+'firebase-firestore-compat.js');}
+  catch(e){CL.loading=false;clSet('offline','Cannot reach the internet – working on this computer only. Will try again later.');setTimeout(()=>{CL.loading=false;cloudInit();},60000);return;}
+  try{const app=firebase.apps.length?firebase.app():firebase.initializeApp(FB_CFG);CL.auth=firebase.auth();CL.db=firebase.firestore();CL.ready=true;}catch(e){CL.loading=false;clSet('error','Cloud error: '+e.message);return;}
+  CL.auth.onAuthStateChanged(u=>{CL.user=u;if(CL.unsub){CL.unsub();CL.unsub=null;}if(u){clSet('wait','Signed in as '+u.email);cloudFirstSync();}else clSet('signedout','Not signed in – saving on this computer only');});
+  window.addEventListener('online',()=>{if(CL.user&&CL.dirty)cloudPush();});window.addEventListener('offline',()=>clSet('offline','No internet – changes are kept on this computer and will be saved online when the internet is back.'));}
+const clDoc=()=>CL.db.collection('ttmaker').doc('main');
+async function cloudFirstSync(){try{const snap=await clDoc().get();
+    if(!snap.exists){await cloudPush(true);toast('☁️ Your timetable is now saved online');}
+    else{const d=snap.data();const local=JSON.stringify(S);
+      if(d.data===local){CL.rev=d.rev||0;storeRev();setDirty(false);clSet('saved','Saved online · '+fmtCloud(d.at));}
+      else if((d.rev||0)===CL.rev){await cloudPush();}
+      else if(!getDirty()){CL.pending=d;cloudUseRemote();}
+      else askCloudChoice(d);}
+    cloudListen();}catch(e){clErr(e);}}
+function setDirty(v){CL.dirty=v;try{localStorage.setItem('sjs_tt_dirty',v?'1':'0');}catch(e){}}
+function getDirty(){try{return localStorage.getItem('sjs_tt_dirty')==='1';}catch(e){return CL.dirty;}}
+function askCloudChoice(d){modal(`<h3>☁️ Two different copies</h3><p>The online copy was saved on <b>${esc(fmtCloud(d.at))}</b> by <b>${esc(d.by||'')}</b>${d.devName?' ('+esc(d.devName)+')':''}. The copy on this computer is different.</p><p class="muted">Which one do you want to keep? The other one is kept as a saved version, so nothing is lost.</p>
+  <div class="row"><button class="btn green" onclick="closeModal();cloudUseRemote()">☁️ Use the online copy</button><button class="btn sec" onclick="closeModal();cloudKeepLocal()">💻 Keep this computer's copy</button></div>`);CL.pending=d;clSet('wait','Waiting for your choice');}
+function cloudUseRemote(){const d=CL.pending;if(!d)return;try{saveVersion('Before loading online copy');}catch(e){}CL.applying=true;S=JSON.parse(d.data);fix();save();CL.applying=false;CL.rev=d.rev||0;storeRev();setDirty(false);refreshHeader();go(curView||'home');clSet('saved','Saved online · '+fmtCloud(d.at));toast('☁️ Online copy loaded');}
+async function cloudKeepLocal(){setDirty(true);await cloudPush(true);}
+function cloudListen(){if(CL.unsub)return;CL.unsub=clDoc().onSnapshot(sn=>{if(!sn.exists)return;const d=sn.data();if(d.dev===CL.dev||(d.rev||0)<=CL.rev)return;
+    if(getDirty()){CL.pending=d;askCloudChoice(d);return;}
+    CL.applying=true;try{S=JSON.parse(d.data);fix();LASTJ=JSON.stringify(S);localStorage.setItem(LS,LASTJ);}catch(e){}CL.applying=false;CL.rev=d.rev||0;storeRev();refreshHeader();try{render(curView);}catch(e){go(curView||'home');}
+    clSet('saved','Updated from another device · '+fmtCloud(d.at));toast('☁️ Updated with changes made on another device');},e=>clErr(e));}
+function storeRev(){try{localStorage.setItem('sjs_tt_cloudrev',String(CL.rev));}catch(e){}}
+function cloudQueue(){if(CL.applying)return;setDirty(true);if(!CL.user){return;}clearTimeout(CL.timer);clSet('saving','Saving…');CL.timer=setTimeout(()=>cloudPush(),2500);}
+async function cloudPush(force){if(!CL.user||!CL.db)return;if(!navigator.onLine){clSet('offline','No internet – will save online when the internet is back.');return;}
+  try{clSet('saving','Saving…');const data=JSON.stringify(S);if(data.length>950000){clSet('error','Data too large for one online save – please contact support');return;}
+    const rev=Date.now(),day=new Date().toISOString().slice(0,10);
+    const rec={data,rev,dev:CL.dev,devName:navigator.platform||'',by:CL.user.email,at:firebase.firestore.FieldValue.serverTimestamp(),size:data.length};
+    await clDoc().set(rec);CL.rev=rev;storeRev();setDirty(false);
+    CL.db.collection('ttmaker_backups').doc(day).set({data,by:CL.user.email,at:firebase.firestore.FieldValue.serverTimestamp(),size:data.length}).catch(()=>{});
+    CL.lastAt=Date.now();clSet('saved','Saved online · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));}
+  catch(e){clErr(e);}}
+function clErr(e){const m=String(e&&e.message||e);if(/permission|insufficient/i.test(m))clSet('error','This email is not allowed to save. Ask the Admin to add it to the Firebase rules (see Settings & Backup).');else if(/offline|network|unavailable/i.test(m))clSet('offline','No internet – will save online when the internet is back.');else clSet('error','Cloud error: '+m);}
+function fmtCloud(t){try{const d=t&&t.toDate?t.toDate():new Date(t);return d.toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+async function cloudSignIn(){const em=($('clEmail').value||'').trim(),pw=$('clPass').value||'';if(!em||!pw){toast('Enter email and password');return;}
+  try{await CL.auth.signInWithEmailAndPassword(em,pw);toast('✅ Signed in');}catch(e){const m=String(e.code||e.message);toast(/wrong-password|invalid-credential|user-not-found|invalid-login/.test(m)?'❌ Wrong email or password':'❌ '+m);}}
+async function cloudSignOut(){if(CL.dirty&&CL.user)await cloudPush();await CL.auth.signOut();toast('Signed out – now saving on this computer only');}
+async function cloudReset(){const em=($('clEmail').value||'').trim();if(!em){toast('Type your email first');return;}try{await CL.auth.sendPasswordResetEmail(em);toast('📧 Password reset email sent');}catch(e){toast('❌ '+(e.code||e.message));}}
+async function cloudBackups(){const el=$('clBackups');if(!el)return;el.innerHTML='Loading…';try{const q=await CL.db.collection('ttmaker_backups').orderBy(firebase.firestore.FieldPath.documentId(),'desc').limit(30).get();
+  const rows=[];q.forEach(d=>rows.push(d));el.innerHTML=rows.length?`<table class="list"><tr><th>Day</th><th>Saved</th><th>By</th><th></th></tr>${rows.map(d=>{const x=d.data();return `<tr><td><b>${esc(d.id)}</b></td><td>${esc(fmtCloud(x.at))}</td><td>${esc(x.by||'')}</td><td><button class="btn sm" onclick="cloudRestoreDay('${esc(d.id)}')">Restore</button></td></tr>`;}).join('')}</table>`:'<p class="muted">No daily copies yet.</p>';
+  const old=rows.slice(30);old.forEach(d=>d.ref.delete().catch(()=>{}));}catch(e){el.innerHTML='<p class="muted">Could not load: '+esc(e.message)+'</p>';}}
+async function cloudRestoreDay(day){if(!needAdmin())return;try{const d=await CL.db.collection('ttmaker_backups').doc(day).get();if(!d.exists)return;ask(`Go back to the online copy of ${day}? Your current data is kept as a saved version.`,()=>{saveVersion('Before restoring online copy '+day);S=JSON.parse(d.data().data);fix();logAct('Restored online copy of '+day);save();refreshHeader();go('backup');toast('☁️ Restored '+day);});}catch(e){clErr(e);}}
+function drawCloud(){const el=$('cloudBox');if(!el)return;
+  if(!CL.ready){el.innerHTML=`<p>${CL.state==='offline'?'⚠️ ':'⏳ '}${esc(CL.msg||'Connecting…')}</p><div class="row"><button class="btn sm" onclick="CL.loading=false;cloudInit()">Try again</button></div>`;return;}
+  if(!CL.user){el.innerHTML=`<div class="row"><label>Admin email<input id="clEmail" type="email" autocomplete="username" style="min-width:230px"></label><label>Password<input id="clPass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')cloudSignIn()"></label><button class="btn green" onclick="cloudSignIn()">🔑 Sign in</button><button class="btn sm sec" onclick="cloudReset()">Forgot password</button></div><p class="muted" style="margin-top:6px">Now saving on this computer only.</p>`;return;}
+  const col={saved:'ok',saving:'',offline:'',error:'err',wait:''}[CL.state]||'';
+  el.innerHTML=`<div class="note ${col}">${{saved:'✅',saving:'⏳',offline:'⚠️',error:'❌',wait:'⏳'}[CL.state]||'☁️'} ${esc(CL.msg)}</div>
+   <p>Signed in as <b>${esc(CL.user.email)}</b></p>
+   <div class="row"><button class="btn" onclick="cloudPush(true)">☁️ Save online now</button><button class="btn sec" onclick="cloudBackups()">🗓️ Daily online copies</button><button class="btn sm sec" onclick="cloudSignOut()">Sign out</button></div><div id="clBackups" style="margin-top:8px"></div>`;}
 load();autoSeason();LASTJ=JSON.stringify(S);applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
+try{cloudInit();}catch(e){}
 </script>
 </body>
 </html>
