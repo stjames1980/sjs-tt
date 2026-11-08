@@ -141,19 +141,58 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
 #ghost{position:fixed;z-index:70;pointer-events:none;width:84px;opacity:.92;transform:rotate(-3deg);box-shadow:0 8px 20px #0004;border-radius:8px;background:#fff}
 .ds{display:none}
 #printArea{display:none}
-body.measuring #printArea .pg{break-inside:avoid;page-break-inside:avoid}
-body.measuring #printArea .pg .ph{display:flex!important;break-after:avoid}
-body.measuring #printArea .pg .ph img{width:56px!important;height:56px!important}
-body.measuring #printArea .pg .tw{overflow:visible!important}
-body.measuring #printArea .pg .ttg{width:100%;font-size:11px}
-body.measuring #printArea .pg .ttg th{padding:3px!important;font-size:11px}
-body.measuring #printArea .pg .ttg td.tper{font-size:10px;padding:2px 4px!important;white-space:nowrap}
-body.measuring #printArea .pg .ttg td.tper span{font-size:9px}
-body.measuring #printArea .pg .tc{min-height:34px!important;padding:2px 5px!important;font-size:11px}
-body.measuring #printArea .pg .tc .tl{font-size:9px!important}
-body.measuring #printArea .pg .sig{margin-top:22px!important}
-body.measuring #printArea th,body.measuring #printArea td{padding:4px}
-body.measuring #printArea .ttg{border-spacing:3px}
+body.measuring #printArea{font-family:"Segoe UI",Roboto,Arial,sans-serif;color:#0f172a}
+body.measuring #printArea *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+body.measuring #printArea .pg{width:287mm;height:200mm;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;break-inside:avoid;page-break-inside:avoid;page-break-after:always;break-after:page;background:#fff}
+body.measuring #printArea .pg:last-child{page-break-after:auto;break-after:auto}
+body.measuring #printArea .ph2{display:flex;align-items:stretch;border-radius:10px;overflow:hidden;margin-bottom:6px;flex:0 0 auto;box-shadow:0 0 0 1px #cbd5e1}
+body.measuring #printArea .ph2 .phL{display:flex;align-items:center;gap:12px;padding:8px 16px;background:linear-gradient(120deg,var(--navy),var(--navy2));color:#fff;flex:1}
+body.measuring #printArea .ph2 .phL img{width:62px;height:62px;border-radius:50%;background:#fff;padding:3px;box-sizing:border-box}
+body.measuring #printArea .ph2 .sn{font-size:24px;font-weight:800;letter-spacing:.5px;line-height:1.1}
+body.measuring #printArea .ph2 .sa{font-size:12.5px;opacity:.9;margin-top:2px}
+body.measuring #printArea .ph2 .phR{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:8px 18px;background:#fff;border-left:6px solid var(--gold);min-width:42%;text-align:right}
+body.measuring #printArea .ph2 .pk{font-size:12px;font-weight:800;letter-spacing:2px;color:var(--gold);text-transform:uppercase}
+body.measuring #printArea .ph2 .pn{font-size:26px;font-weight:800;color:var(--navy);line-height:1.1}
+body.measuring #printArea .ph2 .ps{font-size:12.5px;color:#334155;margin-top:2px}
+body.measuring #printArea .pg>h3{margin:2px 0 3px!important;font-size:13px!important;color:var(--navy)!important;flex:0 0 auto}
+body.measuring #printArea .pg>.tw{flex:0 0 auto;min-height:0;overflow:visible!important;border:0!important;display:flex;flex-direction:column}
+body.measuring #printArea .pg>.tw>table{flex:0 0 auto}
+body.measuring #printArea .ttg{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed}
+body.measuring #printArea .ttg th{background:var(--navy)!important;color:#fff!important;border:0!important;border-radius:6px;padding:5px 3px!important;font-size:14px!important;font-weight:800;text-transform:uppercase;letter-spacing:.8px;text-align:center}
+body.measuring #printArea .ttg th:first-child{width:84px;text-transform:none;letter-spacing:0;font-size:12px!important}
+body.measuring #printArea .ttg td{border:0!important;padding:0!important;height:1px}
+body.measuring #printArea .ttg td.tper{background:#f1f5f9;border-radius:6px;padding:3px 6px!important;white-space:nowrap;vertical-align:middle}
+body.measuring #printArea .ttg td.tper b{display:block;font-size:20px;line-height:1;color:var(--navy)}
+body.measuring #printArea .ttg td.tper span{font-size:10.5px;color:#475569;line-height:1.15;display:block}
+body.measuring #printArea .tc{height:100%;min-height:0!important;border-radius:6px;border-left-width:6px;padding:4px 7px!important;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;line-height:1.18}
+body.measuring #printArea .tc .tn{font-size:15.5px;font-weight:800;color:#0b1220;padding-right:0}
+body.measuring #printArea .tc .tl{font-size:12.5px!important;color:#1e293b;font-weight:600}
+body.measuring #printArea .tc .tl.m{font-size:11px!important;color:#475569;font-weight:500}
+body.measuring #printArea .tc.free{font-size:13px;font-weight:700;color:#16a34a;background:repeating-linear-gradient(135deg,#f0fdf4,#f0fdf4 8px,#e7f9ee 8px,#e7f9ee 16px)!important;align-items:center}
+body.measuring #printArea .tc.empty{align-items:center}
+body.measuring #printArea .brow td{height:auto}
+body.measuring #printArea .brow td.bcell{background:repeating-linear-gradient(45deg,#fff7e0,#fff7e0 8px,#fdeec4 8px,#fdeec4 16px)!important;color:#8a6a00;font-weight:800;letter-spacing:3px;text-transform:uppercase;font-size:11px;padding:2px!important;border-radius:6px}
+body.measuring #printArea .brow td.tper b{font-size:11px!important}
+body.measuring #printArea .brow td.tper span{font-size:9.5px}
+body.measuring #printArea table:not(.ttg):not(.list){width:100%;border-collapse:separate;border-spacing:2px;table-layout:fixed}
+body.measuring #printArea table:not(.ttg):not(.list) th{background:var(--navy)!important;color:#fff!important;border:0!important;border-radius:5px;font-size:12.5px;padding:4px 2px}
+body.measuring #printArea table:not(.ttg):not(.list) th .tm{display:block;font-size:9.5px;font-weight:500;color:#e2f3ea!important}
+body.measuring #printArea table:not(.ttg):not(.list) td{border:0!important;padding:0!important}
+body.measuring #printArea table:not(.ttg):not(.list) td.day{background:#f1f5f9;border-radius:5px;padding:2px 6px!important;font-weight:800;font-size:14px;color:var(--navy);white-space:nowrap}
+body.measuring #printArea table:not(.ttg):not(.list) td.day span{font-size:10.5px!important}
+body.measuring #printArea table:not(.ttg):not(.list) td.brk,#printArea th.brkh{width:12px!important;background:repeating-linear-gradient(45deg,#fff7e0,#fff7e0 5px,#fdeec4 5px,#fdeec4 10px)!important}
+body.measuring #printArea .cell{height:100%;box-sizing:border-box;border-radius:5px;padding:2px 3px;display:flex;flex-direction:column;justify-content:center;text-align:center;min-width:0}
+body.measuring #printArea .cell .s{font-size:13.5px;font-weight:800}
+body.measuring #printArea .cell .t{font-size:11px;font-weight:600}
+body.measuring #printArea table.list{width:100%;border-collapse:collapse;font-size:12.5px}
+body.measuring #printArea table.list th{background:var(--navy)!important;color:#fff!important;border:1px solid var(--navy)!important;padding:5px}
+body.measuring #printArea table.list td{border:1px solid #cbd5e1!important;padding:4px 6px}
+body.measuring #printArea .pleg{flex:0 0 auto;font-size:10.5px;line-height:1.35;margin:4px 0 0;color:#1e293b;columns:3;column-gap:14px}
+body.measuring #printArea .pleg b{color:var(--navy)}
+ #printArea .lock{display:none!important}
+body.measuring #printArea .sig{flex:0 0 auto;margin-top:auto!important;display:flex!important;justify-content:space-between;align-items:flex-end;padding-top:6px;font-size:12px;color:#334155}
+body.measuring #printArea .sig .sl{min-width:180px;text-align:center;border-top:1.5px solid #334155;padding-top:2px;font-weight:700}
+body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:center}
 .ug{display:grid;gap:3px}
 .ug button{border:1px solid var(--line);background:#fff;border-radius:5px;padding:6px 0;font-size:11px;cursor:pointer}
 .ug button.on{background:var(--red);color:#fff}
@@ -173,33 +212,62 @@ body.measuring #printArea .ttg{border-spacing:3px}
  .cell{min-width:62px}
 }
 @media print{
- @page{size:A4 landscape;margin:9mm}
- body{background:#fff}
+ @page{size:A4 landscape;margin:5mm}
+ html,body{background:#fff!important;height:auto!important;min-height:0!important;margin:0!important}
  header,nav,main,.wrap,#bnav,#modal,#toast{display:none!important}
- html,body{height:auto!important;min-height:0!important}
- .pg{break-inside:avoid;page-break-inside:avoid}
- .pg .ph{display:flex!important;break-after:avoid}
- .pg .ph img{width:56px!important;height:56px!important}
- .pg .tw{overflow:visible!important}
- .pg .ttg{width:100%;font-size:11px}
- .pg .ttg th{padding:3px!important;font-size:11px}
- .pg .ttg td.tper{font-size:10px;padding:2px 4px!important;white-space:nowrap}
- .pg .ttg td.tper span{font-size:9px}
- .pg .tc{min-height:34px!important;padding:2px 5px!important;font-size:11px}
- .pg .tc .tl{font-size:9px!important}
- .pg .sig{margin-top:22px!important}
  #printArea{display:block!important}
- .pg{page-break-after:always}
- .pg:last-child{page-break-after:auto}
- .ph{text-align:center;margin-bottom:8px}
- .ph h2{margin:0;font-size:18px;color:#000}
- .tc,.bcell{-webkit-print-color-adjust:exact;print-color-adjust:exact}
- .ttg{border-spacing:3px}.ttg td{border:0!important}.tc{min-height:44px;padding:4px 6px}.tc .tl{font-size:10px}
- .ph div{font-size:12px}
- th,td{border:1px solid #555!important;padding:4px}
- th{background:#e8e8e8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
- .cell{-webkit-print-color-adjust:exact;print-color-adjust:exact}
- .sig{display:flex;justify-content:space-between;margin-top:36px;font-size:12px}
+
+ #printArea{font-family:"Segoe UI",Roboto,Arial,sans-serif;color:#0f172a}
+ #printArea *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+ #printArea .pg{width:287mm;height:200mm;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;break-inside:avoid;page-break-inside:avoid;page-break-after:always;break-after:page;background:#fff}
+ #printArea .pg:last-child{page-break-after:auto;break-after:auto}
+ #printArea .ph2{display:flex;align-items:stretch;border-radius:10px;overflow:hidden;margin-bottom:6px;flex:0 0 auto;box-shadow:0 0 0 1px #cbd5e1}
+ #printArea .ph2 .phL{display:flex;align-items:center;gap:12px;padding:8px 16px;background:linear-gradient(120deg,var(--navy),var(--navy2));color:#fff;flex:1}
+ #printArea .ph2 .phL img{width:62px;height:62px;border-radius:50%;background:#fff;padding:3px;box-sizing:border-box}
+ #printArea .ph2 .sn{font-size:24px;font-weight:800;letter-spacing:.5px;line-height:1.1}
+ #printArea .ph2 .sa{font-size:12.5px;opacity:.9;margin-top:2px}
+ #printArea .ph2 .phR{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:8px 18px;background:#fff;border-left:6px solid var(--gold);min-width:42%;text-align:right}
+ #printArea .ph2 .pk{font-size:12px;font-weight:800;letter-spacing:2px;color:var(--gold);text-transform:uppercase}
+ #printArea .ph2 .pn{font-size:26px;font-weight:800;color:var(--navy);line-height:1.1}
+ #printArea .ph2 .ps{font-size:12.5px;color:#334155;margin-top:2px}
+ #printArea .pg>h3{margin:2px 0 3px!important;font-size:13px!important;color:var(--navy)!important;flex:0 0 auto}
+ #printArea .pg>.tw{flex:0 0 auto;min-height:0;overflow:visible!important;border:0!important;display:flex;flex-direction:column}
+ #printArea .pg>.tw>table{flex:0 0 auto}
+ #printArea .ttg{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed}
+ #printArea .ttg th{background:var(--navy)!important;color:#fff!important;border:0!important;border-radius:6px;padding:5px 3px!important;font-size:14px!important;font-weight:800;text-transform:uppercase;letter-spacing:.8px;text-align:center}
+ #printArea .ttg th:first-child{width:84px;text-transform:none;letter-spacing:0;font-size:12px!important}
+ #printArea .ttg td{border:0!important;padding:0!important;height:1px}
+ #printArea .ttg td.tper{background:#f1f5f9;border-radius:6px;padding:3px 6px!important;white-space:nowrap;vertical-align:middle}
+ #printArea .ttg td.tper b{display:block;font-size:20px;line-height:1;color:var(--navy)}
+ #printArea .ttg td.tper span{font-size:10.5px;color:#475569;line-height:1.15;display:block}
+ #printArea .tc{height:100%;min-height:0!important;border-radius:6px;border-left-width:6px;padding:4px 7px!important;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;line-height:1.18}
+ #printArea .tc .tn{font-size:15.5px;font-weight:800;color:#0b1220;padding-right:0}
+ #printArea .tc .tl{font-size:12.5px!important;color:#1e293b;font-weight:600}
+ #printArea .tc .tl.m{font-size:11px!important;color:#475569;font-weight:500}
+ #printArea .tc.free{font-size:13px;font-weight:700;color:#16a34a;background:repeating-linear-gradient(135deg,#f0fdf4,#f0fdf4 8px,#e7f9ee 8px,#e7f9ee 16px)!important;align-items:center}
+ #printArea .tc.empty{align-items:center}
+ #printArea .brow td{height:auto}
+ #printArea .brow td.bcell{background:repeating-linear-gradient(45deg,#fff7e0,#fff7e0 8px,#fdeec4 8px,#fdeec4 16px)!important;color:#8a6a00;font-weight:800;letter-spacing:3px;text-transform:uppercase;font-size:11px;padding:2px!important;border-radius:6px}
+ #printArea .brow td.tper b{font-size:11px!important}
+ #printArea .brow td.tper span{font-size:9.5px}
+ #printArea table:not(.ttg):not(.list){width:100%;border-collapse:separate;border-spacing:2px;table-layout:fixed}
+ #printArea table:not(.ttg):not(.list) th{background:var(--navy)!important;color:#fff!important;border:0!important;border-radius:5px;font-size:12.5px;padding:4px 2px}
+ #printArea table:not(.ttg):not(.list) th .tm{display:block;font-size:9.5px;font-weight:500;color:#e2f3ea!important}
+ #printArea table:not(.ttg):not(.list) td{border:0!important;padding:0!important}
+ #printArea table:not(.ttg):not(.list) td.day{background:#f1f5f9;border-radius:5px;padding:2px 6px!important;font-weight:800;font-size:14px;color:var(--navy);white-space:nowrap}
+ #printArea table:not(.ttg):not(.list) td.day span{font-size:10.5px!important}
+ #printArea table:not(.ttg):not(.list) td.brk,#printArea th.brkh{width:12px!important;background:repeating-linear-gradient(45deg,#fff7e0,#fff7e0 5px,#fdeec4 5px,#fdeec4 10px)!important}
+ #printArea .cell{height:100%;box-sizing:border-box;border-radius:5px;padding:2px 3px;display:flex;flex-direction:column;justify-content:center;text-align:center;min-width:0}
+ #printArea .cell .s{font-size:13.5px;font-weight:800}
+ #printArea .cell .t{font-size:11px;font-weight:600}
+ #printArea table.list{width:100%;border-collapse:collapse;font-size:12.5px}
+ #printArea table.list th{background:var(--navy)!important;color:#fff!important;border:1px solid var(--navy)!important;padding:5px}
+ #printArea table.list td{border:1px solid #cbd5e1!important;padding:4px 6px}
+ #printArea .pleg{flex:0 0 auto;font-size:10.5px;line-height:1.35;margin:4px 0 0;color:#1e293b;columns:3;column-gap:14px}
+ #printArea .pleg b{color:var(--navy)}
+ #printArea .sig{flex:0 0 auto;margin-top:auto!important;display:flex!important;justify-content:space-between;align-items:flex-end;padding-top:6px;font-size:12px;color:#334155}
+ #printArea .sig .sl{min-width:180px;text-align:center;border-top:1.5px solid #334155;padding-top:2px;font-weight:700}
+ #printArea .sig .sm{font-size:10px;color:#64748b;align-self:center}
 }
 </style>
 </head>
@@ -1831,16 +1899,24 @@ function doSecFixAll(){if(!needAdmin())return;ask('Make all sections equal now? 
   for(let g=0;g<200;g++){const f=sectionFixes(S,csumClasses().map(c=>c.id)).find(x=>!x.only&&!x.over.length);if(!f)break;if(!applySectionFix(S,f))break;n++;}
   logAct(`Section balance: ${n} fix(es)`);save();renderReports();toast(`⚖️ ${n} fix(es) done – now remake the routine in Auto Generate`);});}
 /* ---- print ---- */
-function pHead(t,sub){return `<div class="ph" style="display:flex;align-items:center;justify-content:center;gap:14px;text-align:center;margin-bottom:8px"><img src="${$('logoImg').src}" style="width:70px;height:70px"><div><h2 style="margin:0">${esc(S.school.name)}</h2><div>${esc(S.school.address)} · Session ${esc(S.school.session)} · ${seasonTag().replace(/^\S+ /,'')}</div><h3 style="margin:6px 0 2px">${t}</h3>${sub?`<div>${sub}</div>`:''}</div><div style="width:70px"></div></div>`;}
-const sig=()=>`<div class="sig"><span>Time Table In-charge</span><span>${esc(S.school.principal||'Principal')}</span></div>`;
-function fitPages(){/* shrink any sheet that is taller/wider than one A4 landscape page */
-  const pa=$('printArea'),W=1030,H=660;document.body.classList.add('measuring');pa.style.cssText='display:block;position:absolute;left:-9999px;top:0;width:'+W+'px';
-  pa.querySelectorAll('.pg').forEach(pg=>{pg.style.zoom='';const h=pg.scrollHeight,w=pg.scrollWidth;const z=Math.min(1,H/h,W/w);if(z<1)pg.style.zoom=Math.max(0.2,z*0.98).toFixed(3);});
+function pHead(t,sub){const parts=String(t).split(' – ');const kind=parts.length>1?parts[0]:'';const nm=parts.length>1?parts.slice(1).join(' – '):parts[0];
+  return `<div class="ph2"><div class="phL"><img src="${$('logoImg').src}"><div><div class="sn">${esc(S.school.name)}</div><div class="sa">${esc(S.school.address)} · Session ${esc(S.school.session)} · ${seasonTag().replace(/^\S+ /,'')}</div></div></div><div class="phR">${kind?`<div class="pk">${kind}</div>`:''}<div class="pn">${nm}</div>${sub?`<div class="ps">${sub}</div>`:''}</div></div>`;}
+const sig=()=>`<div class="sig"><span class="sl">Time Table In-charge</span><span class="sm">Printed ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</span><span class="sl">${esc(S.school.principal||'Principal')}<br><span style="font-weight:500;font-size:10px">Principal</span></span></div>`;
+function fitPages(){/* fit every sheet to one A4 landscape page: stretch rows to fill the page, or shrink if too big */
+  const pa=$('printArea');document.body.classList.add('measuring');pa.style.cssText='display:block;position:absolute;left:-9999px;top:0';
+  pa.querySelectorAll('.pg').forEach(pg=>{const tabs=[...pg.querySelectorAll(':scope>.tw>table,:scope>table')];
+    pg.style.zoom='';pg.style.height='auto';tabs.forEach(t=>{t.style.height='auto';[...t.rows].forEach(r=>r.style.height='');});
+    const W=pg.getBoundingClientRect().width,H=W*200/287;const h=pg.scrollHeight,w=pg.scrollWidth;
+    if(h>H||w>W+2){const zz=Math.max(0.2,Math.min(H/h,W/w)*0.97);pg.style.zoom=zz.toFixed(3);pg.style.height=(200/zz).toFixed(1)+'mm';pg.style.width=(287/zz).toFixed(1)+'mm';return;}
+    // stretch: share the spare height among the lesson rows (not header / break rows)
+    let spare=H-h-4;const grow=[];tabs.forEach(t=>[...t.rows].forEach((r,i)=>{if(i===0||r.classList.contains('brow')||r.querySelector('.brk:only-child'))return;grow.push(r);}));
+    pg.style.height='';
+    if(spare>0&&grow.length){const add=spare/grow.length;grow.forEach(r=>{r.style.height=(r.getBoundingClientRect().height+add).toFixed(1)+'px';});}});
   pa.style.cssText='';document.body.classList.remove('measuring');}
 function doPrint(html){$('printArea').innerHTML=html;try{fitPages();}catch(e){}try{window.print();}catch(e){}setTimeout(()=>toast('If the print window did not open, open this app file directly in Chrome and print from there.'),900);}
 function printClass(all){const ids=all?S.classes.map(c=>c.id):[TV.mode==='class'&&TV.id?TV.id:S.classes[0].id];
   doPrint(ids.map(id=>{const c=C()[id];return `<div class="pg">${pHead('CLASS TIME TABLE – '+esc(c.name)+(clsRoom(c)?' · '+esc(clsRoom(c)):''),esc(S.shifts[c.shift].name)+' · Class Teacher: '+esc((T()[c.ct]||{}).name||'—'))}${classGrid(id,true)}${legend(id)}${sig()}</div>`;}).join(''));}
-function legend(cid){const al=S.alloc.filter(a=>a.classId===cid);return `<p style="font-size:11px;margin-top:8px">${al.map(a=>`<b>${esc(aCode(a))}</b> ${esc(aName(a))} – ${esc(aTNames(a))}`).join(' · ')}</p>`;}
+function legend(cid){const al=S.alloc.filter(a=>a.classId===cid&&!a.fixed);return `<div class="pleg">${al.map(a=>`<div><b>${esc(aName(a))}</b> (${+a.ppw||0}) – ${esc(aTNames(a))}</div>`).join('')}</div>`;}
 function printTeacher(all){const ids=all?S.teachers.map(t=>t.id):[TV.mode==='teacher'&&TV.id?TV.id:S.teachers[0].id];
   doPrint(ids.map(id=>{const t=T()[id];return `<div class="pg">${pHead('TEACHER TIME TABLE – '+esc(t.name)+' ('+esc(t.abbr)+')','Periods/week: '+(teacherPlaced(S)[id]||0))}${teacherGrid(id,true)}${sig()}</div>`;}).join(''));}
 function printMaster(){const d=+$('mDay').value,sh=$('mShift').value;doPrint(`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,$('mMode').value)}${sig()}</div>`);}
