@@ -159,6 +159,9 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
 #ghost{position:fixed;z-index:70;pointer-events:none;width:84px;opacity:.92;transform:rotate(-3deg);box-shadow:0 8px 20px #0004;border-radius:8px;background:#fff}
 .ds{display:none}
 #printArea{display:none}
+body.staff nav,body.staff #bnav,body.staff #cloudBtn,body.staff #adminBtn,body.staff #undoTop,body.staff #menuBtn,body.staff #installBtn{display:none!important}
+body.staff .wrap{display:block}body.staff main{max-width:1200px;margin:0 auto}
+.seg button.act{background:var(--navy);color:#fff}
 body.measuring #printArea{font-family:"Segoe UI",Roboto,Arial,sans-serif;color:#0f172a}
 body.measuring #printArea *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
 body.measuring #printArea .pg{width:287mm;height:199mm;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;break-inside:avoid;page-break-inside:avoid;page-break-after:always;break-after:page;background:#fff}
@@ -486,6 +489,11 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
   <button class="btn sec" onclick="printAdjust()">🖨️ Print</button>
  </div>
  <div class="card"><h3>WhatsApp message preview</h3><textarea id="waText" readonly></textarea></div>
+ <div class="card" id="leaveCard"><h3>🏖️ Teacher leave (one or more days)</h3>
+  <p class="muted">Enter a leave once. On every working day of the leave the teacher is marked absent and substitutes are planned automatically.</p>
+  <div class="row"><label>Teacher<select id="lvT"></select></label><label>From<input type="date" id="lvFrom"></label><label>To<input type="date" id="lvTo"></label><label>Reason<input type="text" id="lvWhy" placeholder="e.g. Medical leave" style="min-width:160px"></label><button class="btn" onclick="addLeave()">+ Add leave</button></div>
+  <div id="lvList" style="margin-top:8px"></div>
+ </div>
  <div class="grid2">
   <div class="card"><h3>📅 Saved adjustments</h3><div id="aHist"></div></div>
   <div class="card"><h3>⚖️ Substitutions this month</h3><div id="aFair"></div></div>
@@ -507,9 +515,12 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
    <label>Teacher max periods / day<input type="number" min="1" max="10" id="gTMax" style="width:90px"></label>
    <label>Teacher max periods / week<input type="number" min="1" max="45" id="gWk" style="width:90px"></label>
    <label>Max periods in a row (no break)<input type="number" min="0" max="8" id="gRow" style="width:90px" title="A teacher should not get more than this many periods one after another without a break. Example: 2 = no P5-P6-P7. One more is allowed across a break (e.g. P3-P4 | Lunch | P5). 0 = off"></label>
+   <label title="Longest free gap a teacher should have between two classes in a day (0 = no limit)">Max free gap (periods)<input type="number" min="0" max="6" id="gGap" style="width:90px"></label>
    <label>Attempts<input type="number" min="1" max="200" id="gAtt" style="width:90px"></label>
    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="gCT"> Class teacher takes 1st period</label>
    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)" title="Maths, Science, English in the middle periods; Music, EVS and other light subjects towards the last period"><input type="checkbox" id="gSP"> Difficult subjects in middle periods</label>
+   <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)" title="A 5-period subject gets one period every day; a 3-period subject on 3 different days"><input type="checkbox" id="gSW"> Spread each subject over the week</label>
+   <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)" title="A subject should not be in the same period every day (e.g. Science always in P1). At most 2 days in the same period."><input type="checkbox" id="gVP"> Change a subject's period day to day</label>
   </div>
   <div class="row">
    <button class="btn gold" onclick="runGen('all')">⚡ Generate whole school</button>
@@ -768,6 +779,9 @@ function generate(S,opt){
       s+=posPen(S,a,p,np);
       const mr=+S.settings.maxRow||0;
       if(mr){const sh=C[cid].shift,blk=breakBlocks(S,sh);for(const tid of TIDS(a)){let run=1;for(let q=p-1;q>=0&&busy[bk(tid,sh,d,q)]&&blk[q]===blk[p];q--)run++;for(let q=p+1;q<np&&busy[bk(tid,sh,d,q)]&&blk[q]===blk[p];q++)run++;if(run>mr)s+=10*(run-mr);let all=1;for(let q=p-1;q>=0&&busy[bk(tid,sh,d,q)];q--)all++;for(let q=p+1;q<np&&busy[bk(tid,sh,d,q)];q++)all++;if(all>mr+1)s+=3*(all-mr-1);}}
+      s+=samePeriodPen(S,tt[cid],A,days,a.subject,p,d);
+      {const sh=C[cid].shift,cnt=sDay[cid+'|'+d+'|'+a.subject]||0,lim=spreadLimit(S,a);if(S.settings.spreadWeek!==false&&cnt>=lim)s+=18*(cnt-lim+1);
+       const fb=(t,ssh,dd,q)=>q===p||!!busy[bk(t,ssh,dd,q)];for(const tid of TIDS(a)){s+=teacherDayPen(S,fb,tid,sh,d,T)-teacherDayPen(S,(t,ssh,dd,q)=>!!busy[bk(t,ssh,dd,q)],tid,sh,d,T);}}
       return s+R()*3;
     }
     // class teacher first period
@@ -862,7 +876,7 @@ function generate(S,opt){
     if(!best||sc<best.sc)best={tt,unplaced,sc,attempt:at+1};
     if(unplaced.length===0&&spread===0&&edge===0)break;
   }
-  if(+S.settings.maxRow)best.tt=improveRuns(S,best.tt,target,(opt.seed||Date.now())+13);
+  best.tt=improveRuns(S,best.tt,target,(opt.seed||Date.now())+13);
   const summary={};best.unplaced.forEach(aid=>summary[aid]=(summary[aid]||0)+1);
   return {tt:best.tt,unplaced:summary,unplacedTotal:best.unplaced.length,attempt:best.attempt};
 }
@@ -872,6 +886,16 @@ function generate(S,opt){
    Breaks split the day into blocks. With "Max periods in a row" = 2 a teacher
    should not get 3 periods one after another with no break between them
    (e.g. P5-P6-P7). Across a break one more is allowed (e.g. P3-P4 | lunch | P5). */
+
+/* ---- teacher day quality: long gaps, first / last period wishes ---- */
+function teacherDayPen(S,busyFn,tid,sh,d,T){const np=nPer(S,sh),mg=S.settings.maxGap===undefined?2:+S.settings.maxGap;const t=T&&T[tid];let s=0,first=-1,last=-1;
+  for(let p=0;p<np;p++)if(busyFn(tid,sh,d,p)){if(first<0)first=p;last=p;}
+  if(first<0)return 0;
+  if(mg>0){let g=0;for(let p=first;p<=last;p++){if(busyFn(tid,sh,d,p)){if(g>mg)s+=8*(g-mg);g=0;}else g++;}}
+  if(t){if(t.noFirst&&busyFn(tid,sh,d,0))s+=25;if(t.noLast&&busyFn(tid,sh,d,np-1))s+=25;}
+  return s;}
+function samePeriodPen(S,ttc,A,days,subject,p,skipD){if(S.settings.varyPeriod===false)return 0;let n=0;for(const d of days){if(d===skipD)continue;const c=ttc[SK(d,p)];const a=c&&A[c.a];if(a&&a.subject===subject)n++;}return n>=2?15*(n-1)+2*n:2*n;}
+function spreadLimit(S,a){return Math.max(1,Math.ceil((+a.ppw||0)/Math.max(1,S.days.length)));}
 function breakBlocks(S,sh){const np=nPer(S,sh),br=new Set(((S.shifts[sh]||{}).breaks||[]).map(b=>+b.after));const out=[];let b=0;for(let p=0;p<np;p++){if(p>0&&br.has(p))b++;out.push(b);}return out;}
 function runPenalty(S,busyFn,tid,sh,d){const mr=+S.settings.maxRow||0;if(!mr)return 0;const np=nPer(S,sh),blk=breakBlocks(S,sh);let s=0,run=0,all=0;
   for(let p=0;p<=np;p++){const b=p<np&&busyFn(tid,sh,d,p);
@@ -909,7 +933,9 @@ function improveRuns(S,tt0,target,seed){
     const i1=Math.floor(R()*mv.length);let i2=Math.floor(R()*mv.length);if(i1===i2)continue;
     const [d1,p1]=mv[i1],[d2,p2]=mv[i2];const k1=SK(d1,p1),k2=SK(d2,p2);const c1=tt[cid][k1],c2=tt[cid][k2];if(!c1&&!c2)continue;
     const aff=new Set();[c1,c2].forEach(cc=>{if(cc)TIDS(A[cc.a]).forEach(t=>{aff.add(t+'|'+d1);aff.add(t+'|'+d2);});});
-    const cost=()=>{let s=0;aff.forEach(x=>{const [t,d]=x.split('|');s+=W*runPenalty(S,isB,t,sh,+d);const tm=(T[t]&&+T[t].maxDay)||+S.settings.teacherMaxDay||99;s+=60*Math.max(0,(tDay[t+'|'+d]||0)-tm);});return s;};
+    const cost=()=>{let s=0;aff.forEach(x=>{const [t,d]=x.split('|');s+=W*runPenalty(S,isB,t,sh,+d)+teacherDayPen(S,isB,t,sh,+d,T);const tm=(T[t]&&+T[t].maxDay)||+S.settings.teacherMaxDay||99;s+=60*Math.max(0,(tDay[t+'|'+d]||0)-tm);});
+      if(S.settings.spreadWeek!==false)[c1,c2].forEach(cc=>{if(!cc)return;const a=A[cc.a],lim=spreadLimit(S,a);[d1,d2].forEach(d=>{const n=sDay[cid+'|'+d+'|'+a.subject]||0;if(n>lim)s+=18*(n-lim);});});
+      if(S.settings.varyPeriod!==false)[c1,c2].forEach(cc=>{if(!cc)return;const sub=A[cc.a].subject;[p1,p2].forEach(pp=>{let n=0;for(const d of days){const x=tt[cid][SK(d,pp)];if(x&&A[x.a]&&A[x.a].subject===sub)n++;}if(n>2)s+=15*(n-2);});});return s;};
     const pp=(cc,p)=>cc&&S.settings.spread!==false?Math.max(0,posPen(S,A[cc.a],p,np)):0;
     const before=cost()+pp(c1,p1)+pp(c2,p2);
     if(c1){mark(cid,d1,p1,c1.a,-1);delete tt[cid][k1];}if(c2){mark(cid,d2,p2,c2.a,-1);delete tt[cid][k2];}
@@ -1358,8 +1384,15 @@ const isoD=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+Str
 function ttHash(){const s=JSON.stringify(S.tt);let x=0;for(let i=0;i<s.length;i++)x=(x*31+s.charCodeAt(i))|0;return x;}
 function pubStatus(){if(!S.pub)return {t:'Draft',s:'Not published yet',c:'#d97706'};if(S.pub.hash!==ttHash())return {t:'Changed',s:'Edited after publishing on '+new Date(S.pub.at).toLocaleDateString('en-GB'),c:'#d97706'};return {t:'Published',s:'On '+new Date(S.pub.at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}),c:'#16a34a'};}
 function publishTT(){if(!needAdmin())return;const st=clashes(S).length+roomClashes(S).length;
-  const doIt=()=>{S.pub={at:new Date().toISOString(),hash:ttHash()};logAct('Timetable published');save();renderTT();toast('✅ Timetable published');};
-  if(st)ask(`There are ${st} clash(es). Publish anyway?`,doIt);else doIt();}
+  const doIt=()=>{S.pub={at:new Date().toISOString(),hash:ttHash()};S.pubTT=JSON.parse(JSON.stringify(S.tt));logAct('Timetable published');save();renderTT();
+    if(typeof cloudPublish==='function'&&CL.user)cloudPublish(true).then(ok=>toast(ok?'✅ Published – teachers can see it now':'✅ Published on this computer (could not reach the cloud)'));else toast('✅ Timetable published'+(CL.user?'':' – sign in to Online saving so teachers can see it'));};
+  let h='<h3>📢 Publish the timetable</h3>';
+  if(S.pubTT){const cr=changeReport(S,S.pubTT);h+=cr.teachers?changeHtml(cr).replace('What changed','What changed since the last publish'):'<p class="note ok">No change in the routine since the last publish.</p>';}
+  else h+='<p>This is the first publish.</p>';
+  if(st)h+=`<p class="note err">⚠️ There are ${st} clash(es). You can still publish.</p>`;
+  h+=`<p class="muted">After publishing, teachers see this routine on the staff link (Settings &amp; Backup → Share with teachers).</p><div class="row"><button class="btn green" id="pubGo">📢 Publish now</button><button class="btn sec" onclick="closeModal()">Cancel</button></div>`;
+  modal(h);$('pubGo').onclick=()=>{closeModal();doIt();};}
+function pubChanges(){if(!S.pubTT){toast('Not published yet');return;}const cr=changeReport(S,S.pubTT);modal(`<h3>🔁 Changes since the last publish</h3>${cr.teachers?changeHtml(cr):'<p class="note ok">No change since the last publish.</p>'}<div class="row"><button class="btn" onclick="closeModal()">OK</button></div>`);}
 function shortRoom(cid,a){const r=roomOf(S,cid,a);return String(r).startsWith('cls:')?'Room '+(C()[cid]||{}).name:roomName(S,r);}
 function aCode(a){return a.s2?a.subject+'/'+a.s2:a.subject;}
 function aName(a){return a.s2?subj(a.subject).name+' / '+subj(a.s2).name:subj(a.subject).name;}
@@ -1492,7 +1525,37 @@ document.addEventListener('pointercancel',e=>finishDrag(e,true));
 /* ---- adjustment ---- */
 let ADJ={date:'',absent:[],subs:{}};
 function renderAdjustView(){$('aAuto').checked=!!S.settings.autoAdj;if(!$('aDate').value)$('aDate').value=todayStr();loadAdjust();}
-function loadAdjust(){const ds=$('aDate').value;const sv=S.adjust[ds];ADJ={date:ds,absent:sv?sv.absent.slice():[],subs:sv?Object.assign({},sv.subs):{},manual:sv?Object.assign({},sv.manual||{}):{}};drawAdjust();}
+
+/* ---- teacher leave register ---- */
+function leaveOn(ds){return (S.leaves||[]).filter(l=>l.from<=ds&&ds<=l.to).map(l=>l.t);}
+function datesBetween(a,b){const out=[];let d=new Date(a+'T00:00:00');const e=new Date(b+'T00:00:00');let n=0;while(d<=e&&n<400){out.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'));d.setDate(d.getDate()+1);n++;}return out;}
+function planLeaveDays(l){const keep=ADJ;let n=0;
+  datesBetween(l.from,l.to).forEach(ds=>{const di=dayIdx(ds);if(di<0||!S.days.includes(di))return;const sv=S.adjust[ds];
+    ADJ={date:ds,absent:sv?sv.absent.slice():[],subs:sv?Object.assign({},sv.subs):{},manual:sv?Object.assign({},sv.manual||{}):{}};
+    if(!ADJ.absent.includes(l.t))ADJ.absent.push(l.t);for(const k in ADJ.subs)if(ADJ.subs[k]===l.t)delete ADJ.subs[k];
+    const rows=adjRows();const month=ds.slice(0,7);
+    rows.forEach(r=>{if(ADJ.subs[r.key])return;const cs=candidates(r);if(!cs.length){ADJ.subs[r.key]='';return;}const mc=subCounts(month);const today={};for(const k in ADJ.subs){const t=ADJ.subs[k];if(t)today[t]=(today[t]||0)+1;}
+      const knows=new Set(S.alloc.filter(a=>a.classId===r.c.id).map(a=>a.teacherId));
+      cs.sort((x,y)=>(dayLoad(x.id,r.d)+(today[x.id]||0)*2+(mc[x.id]||0)*.3-(knows.has(x.id)?.8:0))-(dayLoad(y.id,r.d)+(today[y.id]||0)*2+(mc[y.id]||0)*.3-(knows.has(y.id)?.8:0)));ADJ.subs[r.key]=cs[0].id;});
+    S.adjust[ds]={absent:ADJ.absent.slice(),subs:Object.assign({},ADJ.subs),manual:Object.assign({},ADJ.manual||{})};n++;});
+  ADJ=keep;return n;}
+function addLeave(){if(!needAdmin())return;const t=$('lvT').value,f=$('lvFrom').value,to=$('lvTo').value||$('lvFrom').value,why=$('lvWhy').value.trim();
+  if(!t||!f){toast('Choose teacher and From date');return;}if(to<f){toast('“To” date is before “From”');return;}
+  S.leaves=S.leaves||[];const l={id:uid(),t,from:f,to,why};S.leaves.push(l);const n=planLeaveDays(l);
+  logAct(`Leave: ${(T()[t]||{}).name} ${fmtDate(f)} – ${fmtDate(to)}`);save();$('lvWhy').value='';loadAdjust();toast(`🏖️ Leave added – substitutes planned for ${n} working day(s)`);}
+function delLeave(id){if(!needAdmin())return;const l=(S.leaves||[]).find(x=>x.id===id);if(!l)return;
+  ask(`Remove the leave of ${esc((T()[l.t]||{}).name||'')} (${fmtDate(l.from)} – ${fmtDate(l.to)})? Their substitutions on those days are removed too.`,()=>{
+    S.leaves=S.leaves.filter(x=>x.id!==id);
+    datesBetween(l.from,l.to).forEach(ds=>{const a=S.adjust[ds];if(!a)return;a.absent=a.absent.filter(x=>x!==l.t);
+      const AM=A(),di=dayIdx(ds);for(const k in a.subs){const [cid,p]=k.split('|');const cell=(S.tt[cid]||{})[SK(di,+p)];const al=cell&&AM[cell.a];if(al&&TIDS(al).includes(l.t)&&!TIDS(al).some(x=>a.absent.includes(x)))delete a.subs[k];}
+      if(!a.absent.length)delete S.adjust[ds];});
+    logAct('Leave removed');save();loadAdjust();});}
+function drawLeaves(){const sel=$('lvT');if(!sel)return;fillSel(sel,S.teachers.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(t=>[t.id,t.name]),sel.value);
+  if(!$('lvFrom').value)$('lvFrom').value=todayStr();const today=todayStr(),TM=T();
+  const L=(S.leaves||[]).filter(l=>l.to>=today).sort((a,b)=>a.from.localeCompare(b.from));const old=(S.leaves||[]).filter(l=>l.to<today).length;
+  $('lvList').innerHTML=L.length?`<table class="list"><tr><th>Teacher</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th></th></tr>${L.map(l=>{const wd=datesBetween(l.from,l.to).filter(ds=>S.days.includes(dayIdx(ds))).length;return `<tr${l.from<=today?' style="background:#fef3c7"':''}><td><b>${esc((TM[l.t]||{}).name||'?')}</b>${l.from<=today?' <span class="pill a">on leave now</span>':''}</td><td>${fmtDate(l.from)}</td><td>${fmtDate(l.to)}</td><td>${wd}</td><td>${esc(l.why||'')}</td><td>${isAdmin?`<button class="btn sm sec" onclick="replanLeave('${l.id}')">⚡ Re-plan</button> <button class="btn sm red" onclick="delLeave('${l.id}')">✕</button>`:''}</td></tr>`;}).join('')}</table>`:'<p class="muted">No current or coming leave.</p>'+(old?`<p class="muted">${old} past leave(s) kept in the record.</p>`:'');}
+function replanLeave(id){if(!needAdmin())return;const l=(S.leaves||[]).find(x=>x.id===id);if(!l)return;const n=planLeaveDays(l);save();loadAdjust();toast(`⚡ Substitutes re-planned for ${n} day(s) (manual choices kept)`);}
+function loadAdjust(){const ds=$('aDate').value;const sv=S.adjust[ds];ADJ={date:ds,absent:sv?sv.absent.slice():[],subs:sv?Object.assign({},sv.subs):{},manual:sv?Object.assign({},sv.manual||{}):{}};const lv=leaveOn(ds).filter(t=>!ADJ.absent.includes(t));if(lv.length)ADJ.absent.push(...lv);try{drawLeaves();}catch(e){}drawAdjust();}
 function renderAbsentChips(){
   const q=$('aSearch').value.toLowerCase();
   const g=groupBy('t',S.teachers.filter(t=>!q||t.name.toLowerCase().includes(q)||t.abbr.toLowerCase().includes(q)));
@@ -1514,7 +1577,8 @@ function subCounts(month){const cnt={};for(const ds in S.adjust)if(ds.slice(0,7)
 function candidates(r){
   const idx=busyIndex(S),abs=new Set(ADJ.absent);
   const taken=new Set(Object.entries(ADJ.subs).filter(([k,v])=>k!==r.key&&v&&k.split('|')[1]==r.p&&C()[k.split('|')[0]]?.shift===r.sh).map(([k,v])=>v));
-  return S.teachers.filter(t=>!abs.has(t.id)&&!taken.has(t.id)&&!idx[t.id+'|'+r.sh+'|'+r.d+'|'+r.p]&&!(t.unavail||[]).includes(r.sh+'|'+r.d+'|'+r.p));
+  const teaches=new Set();S.alloc.forEach(a=>TIDS(a).forEach(x=>teaches.add(x)));
+  return S.teachers.filter(t=>teaches.has(t.id)&&(!t.shift||t.shift===r.sh||t.shift==='both')&&!abs.has(t.id)&&!taken.has(t.id)&&!idx[t.id+'|'+r.sh+'|'+r.d+'|'+r.p]&&!(t.unavail||[]).includes(r.sh+'|'+r.d+'|'+r.p));
 }
 function dayLoad(tid,d){const idx=busyIndex(S);let n=0;for(const sh of shifts())for(let p=0;p<nPer(S,sh);p++)if(idx[tid+'|'+sh+'|'+d+'|'+p])n++;return n;}
 function reassignAll(){if(!needAdmin())return;ADJ.subs={};ADJ.manual={};autoAssign();saveAdjust(true);}
@@ -1607,12 +1671,12 @@ function tOpts(sel,code,L){const can=S.teachers.filter(t=>(t.can||[]).includes(c
   const o=t=>{const mw=maxWeekOf(S,t),l=L[t.id]||0;return `<option value="${t.id}" ${t.id===sel?'selected':''}>${(t.can||[]).includes(code)?'✓ ':''}${esc(t.name)} (${l}${mw?'/'+mw:''})${mw&&l>mw?' ⚠':''}</option>`;};
   return can.length?`<optgroup label="Can teach ${esc(code)}">${can.map(o).join('')}</optgroup><optgroup label="Other teachers">${oth.map(o).join('')}</optgroup>`:S.teachers.map(o).join('');}
 function renderGenerate(){
-  $('gMax').value=S.settings.maxSame;$('gTMax').value=S.settings.teacherMaxDay;$('gAtt').value=S.settings.attempts;$('gCT').checked=!!S.settings.ctFirst;$('gSP').checked=S.settings.spread!==false;$('gWk').value=S.settings.teacherMaxWeek||'';$('gRow').value=S.settings.maxRow||0;renderCheck();
+  $('gMax').value=S.settings.maxSame;$('gTMax').value=S.settings.teacherMaxDay;$('gAtt').value=S.settings.attempts;$('gCT').checked=!!S.settings.ctFirst;$('gSP').checked=S.settings.spread!==false;$('gWk').value=S.settings.teacherMaxWeek||'';$('gRow').value=S.settings.maxRow||0;$('gGap').value=S.settings.maxGap===undefined?2:S.settings.maxGap;$('gSW').checked=S.settings.spreadWeek!==false;$('gVP').checked=S.settings.varyPeriod!==false;renderCheck();
   fillSel($('gCls'),S.classes.map(c=>[c.id,c.name]),$('gCls').value);$('undoBtn').disabled=!undoStack;
 }
 function runGen(mode){
   if(!needAdmin())return;
-  S.settings.maxSame=+$('gMax').value||2;S.settings.teacherMaxDay=+$('gTMax').value||6;S.settings.attempts=+$('gAtt').value||40;S.settings.ctFirst=$('gCT').checked;S.settings.spread=$('gSP').checked;S.settings.teacherMaxWeek=+$('gWk').value||0;S.settings.maxRow=+$('gRow').value||0;
+  S.settings.maxSame=+$('gMax').value||2;S.settings.teacherMaxDay=+$('gTMax').value||6;S.settings.attempts=+$('gAtt').value||40;S.settings.ctFirst=$('gCT').checked;S.settings.spread=$('gSP').checked;S.settings.teacherMaxWeek=+$('gWk').value||0;S.settings.maxRow=+$('gRow').value||0;S.settings.maxGap=+$('gGap').value||0;S.settings.spreadWeek=$('gSW').checked;S.settings.varyPeriod=$('gVP').checked;
   if(mode!=='force'&&mode!=='forceM'&&mode!=='forceN'&&mode!=='forceone'){const errs=checkAll(S).filter(x=>x.lvl==='err');if(errs.length){renderCheck();$('gResult').innerHTML=`<div class="note err">⛔ ${errs.length} problem(s) must be fixed first (see the check list above), so the routine comes out right.</div><div class="row"><button class="btn sm sec" onclick="runGen('force${mode==='all'?'':mode}')">Generate anyway</button></div>`;$('gCheck').scrollIntoView({behavior:'smooth'});return;}}
   if(mode.startsWith('force'))mode=mode.slice(5)||'all';
   let ids=S.classes.map(c=>c.id);
@@ -1679,7 +1743,7 @@ function renderSetup(){
   }
   if(setupTab==='teachers'){
     const L=teacherLoad(S),g=groupBy('t',S.teachers);
-    h+=`<div class="card"><div class="row"><span class="muted">Show:</span>${shiftFilterBar(TF,'TF')}<input type="text" id="tFilter" placeholder="🔍 Search" oninput="filterRows('tRows',this.value)" style="flex:1;min-width:150px"></div><div class="tw"><table class="list" id="tRows"><tr><th>Name</th><th>Abbr.</th><th>Shift</th><th>Phone</th><th>Max/day</th><th>Max/week</th><th>Load</th><th>Can teach</th><th>Not available</th><th></th></tr>`+['M','N','both',''].filter(k=>TF==='all'||TF===k).map(k=>g[k].length?`<tr><td colspan="10" style="background:var(--tint);font-weight:700;color:var(--navy)">${SHN[k]} (${g[k].length})</td></tr>`+g[k].map(t=>{const i=S.teachers.indexOf(t);return `<tr><td><input type="text" ${dis} value="${esc(t.name)}" onchange="S.teachers[${i}].name=this.value;save()"></td><td><input type="text" ${dis} value="${esc(t.abbr)}" style="width:70px" onchange="S.teachers[${i}].abbr=this.value;save()"></td><td>${shiftSelect('t',i,t)}</td><td><input type="text" ${dis} value="${esc(t.phone||'')}" style="width:120px" onchange="S.teachers[${i}].phone=this.value;save()"></td><td><input type="number" ${dis} min="1" max="10" style="width:64px" value="${t.maxDay||6}" onchange="S.teachers[${i}].maxDay=+this.value;save()"></td><td><input type="number" ${dis} min="0" max="45" style="width:64px" placeholder="${S.settings.teacherMaxWeek||''}" value="${t.maxWeek||''}" onchange="S.teachers[${i}].maxWeek=+this.value||0;save();renderSetup()"></td><td>${(()=>{const l=L[t.id]||0,mw=maxWeekOf(S,t);return mw&&l>mw?`<b style="color:#b91c1c">${l} ⚠</b>`:l;})()}</td><td><button class="btn sm sec" onclick="canTeachDlg('${t.id}')">📚 ${(t.can||[]).length?(t.can||[]).join(', '):'Any'}</button></td><td><button class="btn sm sec" onclick="unavailDlg('${t.id}')">⛔ Slots (${(t.unavail||[]).length})</button></td><td>${isAdmin?`<button class="btn sm red" onclick="delTeacher('${t.id}')">✕</button>`:''}</td></tr>`;}).join(''):'').join('')+`</table></div><p class="muted">Shift “Auto” is worked out from the classes each teacher teaches. Choose Morning / Noon / Both to set it yourself.</p>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addTeacher()">+ Add teacher</button><button class="btn sec" onclick="fillCanFromAlloc()">📚 Fill “can teach” from allocation</button></div>':''}<p class="muted">Max/week empty = school limit (${S.settings.teacherMaxWeek||'none'}, set in Auto Generate).</p></div>`;
+    h+=`<div class="card"><div class="row"><span class="muted">Show:</span>${shiftFilterBar(TF,'TF')}<input type="text" id="tFilter" placeholder="🔍 Search" oninput="filterRows('tRows',this.value)" style="flex:1;min-width:150px"></div><div class="tw"><table class="list" id="tRows"><tr><th>Name</th><th>Abbr.</th><th>Shift</th><th>Phone</th><th>Max/day</th><th>Max/week</th><th>Load</th><th>Can teach</th><th>Not available</th><th></th></tr>`+['M','N','both',''].filter(k=>TF==='all'||TF===k).map(k=>g[k].length?`<tr><td colspan="10" style="background:var(--tint);font-weight:700;color:var(--navy)">${SHN[k]} (${g[k].length})</td></tr>`+g[k].map(t=>{const i=S.teachers.indexOf(t);return `<tr><td><input type="text" ${dis} value="${esc(t.name)}" onchange="S.teachers[${i}].name=this.value;save()"></td><td><input type="text" ${dis} value="${esc(t.abbr)}" style="width:70px" onchange="S.teachers[${i}].abbr=this.value;save()"></td><td>${shiftSelect('t',i,t)}</td><td><input type="text" ${dis} value="${esc(t.phone||'')}" style="width:120px" onchange="S.teachers[${i}].phone=this.value;save()"></td><td><input type="number" ${dis} min="1" max="10" style="width:64px" value="${t.maxDay||6}" onchange="S.teachers[${i}].maxDay=+this.value;save()"></td><td><input type="number" ${dis} min="0" max="45" style="width:64px" placeholder="${S.settings.teacherMaxWeek||''}" value="${t.maxWeek||''}" onchange="S.teachers[${i}].maxWeek=+this.value||0;save();renderSetup()"></td><td>${(()=>{const l=L[t.id]||0,mw=maxWeekOf(S,t);return mw&&l>mw?`<b style="color:#b91c1c">${l} ⚠</b>`:l;})()}</td><td><button class="btn sm sec" onclick="canTeachDlg('${t.id}')">📚 ${(t.can||[]).length?(t.can||[]).join(', '):'Any'}</button></td><td><button class="btn sm sec" onclick="unavailDlg('${t.id}')">⛔ Slots (${(t.unavail||[]).length})${t.noFirst?' · no P1':''}${t.noLast?' · no last':''}</button></td><td>${isAdmin?`<button class="btn sm red" onclick="delTeacher('${t.id}')">✕</button>`:''}</td></tr>`;}).join(''):'').join('')+`</table></div><p class="muted">Shift “Auto” is worked out from the classes each teacher teaches. Choose Morning / Noon / Both to set it yourself.</p>${isAdmin?'<div class="row" style="margin-top:8px"><button class="btn" onclick="addTeacher()">+ Add teacher</button><button class="btn sec" onclick="fillCanFromAlloc()">📚 Fill “can teach” from allocation</button></div>':''}<p class="muted">Max/week empty = school limit (${S.settings.teacherMaxWeek||'none'}, set in Auto Generate).</p></div>`;
   }
   if(setupTab==='classes'){
     const tops=S.teachers.map(t=>[t.id,t.name]);
@@ -1766,7 +1830,10 @@ function updAlloc(aid,f,v){const a=S.alloc.find(x=>x.id===aid);if(!a)return;a[f]
   save();renderSetup();}
 function copyAlloc(){const from=$('cpFrom').value;if(!from)return;S.alloc.filter(a=>a.classId===from).forEach(a=>S.alloc.push({id:uid(),classId:allocCls,subject:a.subject,teacherId:a.teacherId,ppw:a.ppw,maxDay:a.maxDay,s2:a.s2||'',t2:a.t2||''}));save();renderSetup();toast('Copied – now change the teachers');}
 function unavailDlg(tid){
-  const t=T()[tid];let h=`<h3>⛔ ${esc(t.name)} – not available</h3><p class="muted">Tap periods when this teacher must not get a class (meetings, other duty).</p>`;
+  const t=T()[tid];let h=`<h3>⛔ ${esc(t.name)} – not available</h3><p class="muted">Tap periods when this teacher must not get a class (meetings, other duty).</p>
+  <div class="row" style="gap:16px;margin-bottom:6px"><b>Wishes (Generate tries to follow):</b>
+   <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" ${t.noFirst?'checked':''} ${isAdmin?'':'disabled'} onchange="T()['${tid}'].noFirst=this.checked;save()"> No 1st period</label>
+   <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" ${t.noLast?'checked':''} ${isAdmin?'':'disabled'} onchange="T()['${tid}'].noLast=this.checked;save()"> No last period</label></div>`;
   shifts().forEach(sh=>{const s=S.shifts[sh];h+=`<p><b>${esc(s.name)}</b></p><div class="ug" style="grid-template-columns:44px repeat(${s.periods.length},1fr)"><span></span>${s.periods.map((p,i)=>`<span style="text-align:center;font-size:11px">P${i+1}</span>`).join('')}`;
     S.days.forEach(d=>{h+=`<span style="font-size:12px;align-self:center">${DAY_SHORT[d]}</span>`+s.periods.map((p,i)=>{const k=sh+'|'+d+'|'+i;return `<button class="${t.unavail.includes(k)?'on':''}" ${isAdmin?`onclick="togUn('${tid}','${k}',this)"`:'disabled'}>${t.unavail.includes(k)?'⛔':''}</button>`;}).join('');});h+='</div>';});
   h+=`<div class="row" style="margin-top:12px"><button class="btn" onclick="closeModal();renderSetup()">Done</button></div>`;modal(h);
@@ -2065,6 +2132,7 @@ async function cloudPush(force){if(!CL.user||!CL.db)return;if(!navigator.onLine)
     const rec={data,rev,dev:CL.dev,devName:navigator.platform||'',by:CL.user.email,at:firebase.firestore.FieldValue.serverTimestamp(),size:data.length};
     await clDoc().set(rec);CL.rev=rev;storeRev();setDirty(false);
     CL.db.collection('ttmaker_backups').doc(day).set({data,by:CL.user.email,at:firebase.firestore.FieldValue.serverTimestamp(),size:data.length}).catch(()=>{});
+    if(S.pub)cloudPublish();
     CL.lastAt=Date.now();clSet('saved','Saved online · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));}
   catch(e){clErr(e);}}
 function clErr(e){const m=String(e&&e.message||e);if(/permission|insufficient/i.test(m))clSet('error','This email is not allowed to save. Ask the Admin to add it to the Firebase rules (see Settings & Backup).');else if(/offline|network|unavailable/i.test(m))clSet('offline','No internet – will save online when the internet is back.');else clSet('error','Cloud error: '+m);}
@@ -2083,9 +2151,67 @@ function drawCloud(){const el=$('cloudBox');if(!el)return;
   const col={saved:'ok',saving:'',offline:'',error:'err',wait:''}[CL.state]||'';
   el.innerHTML=`<div class="note ${col}">${{saved:'✅',saving:'⏳',offline:'⚠️',error:'❌',wait:'⏳'}[CL.state]||'☁️'} ${esc(CL.msg)}</div>
    <p>Signed in as <b>${esc(CL.user.email)}</b></p>
-   <div class="row"><button class="btn" onclick="cloudPush(true)">☁️ Save online now</button><button class="btn sec" onclick="cloudBackups()">🗓️ Daily online copies</button><button class="btn sm sec" onclick="cloudSignOut()">Sign out</button></div><div id="clBackups" style="margin-top:8px"></div>`;}
-load();autoSeason();LASTJ=JSON.stringify(S);applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
-try{cloudInit();}catch(e){}
+   <div class="row"><button class="btn" onclick="cloudPush(true)">☁️ Save online now</button><button class="btn sec" onclick="cloudBackups()">🗓️ Daily online copies</button><button class="btn sm sec" onclick="cloudSignOut()">Sign out</button></div><div id="clBackups" style="margin-top:8px"></div>${staffLinkHtml()}`;}
+
+/* ---- publish for teachers (read-only staff view) ---- */
+function pubPayload(){const o=JSON.parse(JSON.stringify(S));o.tt=S.pubTT||S.tt;delete o.pubTT;delete o.log;o.settings=Object.assign({},o.settings,{pin:''});
+  o.teachers=o.teachers.map(t=>({id:t.id,name:t.name,abbr:t.abbr,shift:t.shift,unavail:[]}));
+  const cut=new Date(Date.now()-40*864e5).toISOString().slice(0,10);for(const d in o.adjust)if(d<cut)delete o.adjust[d];delete o.leaves;return JSON.stringify(o);}
+async function cloudPublish(force){if(!CL.user||!CL.db||!S.pub)return false;try{const data=pubPayload();if(!force&&data===CL.lastPub)return true;
+    await CL.db.collection('ttmaker_pub').doc('current').set({data,at:firebase.firestore.FieldValue.serverTimestamp(),pubAt:S.pub.at});CL.lastPub=data;CL.pubErr='';return true;}
+  catch(e){CL.pubErr=String(e.message||e);drawCloud();return false;}}
+const STAFF_URL=location.origin+location.pathname.replace(/index\.html$/,'')+'?staff';
+function staffLinkHtml(){return `<div class="card" style="margin-top:10px;background:var(--tint)"><h3>👥 Share with teachers</h3>
+  <p class="muted">Teachers open this link on their phone, choose their name and see their own routine and today's substitutions. They cannot change anything. It shows the <b>published</b> routine; substitutions update by themselves.</p>
+  <div class="row"><input type="text" readonly value="${STAFF_URL}" style="flex:1;min-width:220px" onclick="this.select()"><button class="btn sm" onclick="copyText('${STAFF_URL}')">📋 Copy link</button><a class="btn sm green" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('📅 St. James H.S. School – Time Table\nOpen this link, choose your name and see your routine and today\'s substitutions:\n'+STAFF_URL)}">💬 Send on WhatsApp</a><a class="btn sm sec" style="text-decoration:none" target="_blank" rel="noopener" href="${STAFF_URL}">👁 Open staff view</a></div>
+  <p class="muted" style="margin-top:6px">${S.pub?'Published on '+new Date(S.pub.at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+(S.pub.hash!==ttHash()?' · <b style="color:#b45309">routine changed after publishing – click Publish in Timetable to update teachers</b>':''):'<b style="color:#b45309">Not published yet</b> – go to Timetable and click Publish Timetable.'}${CL.pubErr?'<br><b style="color:#b91c1c">Could not update the staff copy: '+esc(CL.pubErr)+'</b> – add the ttmaker_pub rule in Firebase.':''}</p></div>`;}
+/* ---- staff mode: index.html?staff ---- */
+const STAFF=/[?&]staff\b/.test(location.search);
+let STV={tid:'',view:'today',cid:''};
+function staffShell(){document.body.classList.add('staff');const m=document.querySelector('main');
+  m.insertAdjacentHTML('afterbegin',`<section class="view act" id="v-staff"><h2>📅 My Time Table</h2><p class="sub" id="stInfo">Loading…</p>
+   <div class="card"><div class="row"><label>I am<select id="stT" onchange="STV.tid=this.value;try{localStorage.setItem('sjs_tt_me',this.value)}catch(e){};staffRender()"></select></label>
+   <div class="seg" id="stView"></div><label id="stClsL" style="display:none">Class<select id="stC" onchange="STV.cid=this.value;staffRender()"></select></label></div></div>
+   <div id="stBody"></div></section>`);
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('act',x.id==='v-staff'));}
+async function staffInit(){staffShell();try{STV.tid=localStorage.getItem('sjs_tt_me')||'';const c=localStorage.getItem('sjs_tt_staff');if(c){S=JSON.parse(c);fix();staffRender('(saved copy – checking for updates…)');}}catch(e){}
+  try{const v='10.12.2',b='https://www.gstatic.com/firebasejs/'+v+'/';await loadJs(b+'firebase-app-compat.js');await loadJs(b+'firebase-firestore-compat.js');
+    if(!firebase.apps.length)firebase.initializeApp(FB_CFG);
+    firebase.firestore().collection('ttmaker_pub').doc('current').onSnapshot(sn=>{if(!sn.exists){$('stInfo').textContent='The timetable is not published yet.';return;}const d=sn.data();
+      try{localStorage.setItem('sjs_tt_staff',d.data);}catch(e){}S=JSON.parse(d.data);fix();staffRender();},e=>{$('stInfo').textContent='Cannot load the timetable: '+e.message;});}
+  catch(e){if(!S||!S.teachers||!S.teachers.length)$('stInfo').textContent='No internet. Connect once to load the timetable.';}}
+function staffRender(note){const sel=$('stT');if(!sel||typeof S==='undefined'||!S||!S.teachers)return;
+  const ts=S.teachers.filter(t=>S.alloc.some(a=>TIDS(a).includes(t.id))).sort((a,b)=>a.name.localeCompare(b.name));
+  sel.innerHTML='<option value="">— choose your name —</option>'+ts.map(t=>`<option value="${t.id}" ${t.id===STV.tid?'selected':''}>${esc(t.name)}</option>`).join('');
+  fillSel($('stC'),S.classes.map(c=>[c.id,c.name+(clsRoom(c)?' ('+clsRoom(c)+')':'')]),STV.cid||(S.classes[0]||{}).id);STV.cid=$('stC').value;
+  $('stView').innerHTML=[['today','Today'],['week','My week'],['class','Class routine']].map(v=>`<button class="${STV.view===v[0]?'act':''}" onclick="STV.view='${v[0]}';staffRender()">${v[1]}</button>`).join('');
+  $('stClsL').style.display=STV.view==='class'?'':'none';
+  $('stInfo').innerHTML=`${esc(S.school.name)} · Session ${esc(S.school.session)}${S.pub?' · Published '+new Date(S.pub.at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):''}${note?' '+note:''}`;
+  const td=todayStr();TV.week=mondayOf(td);const di=dayIdx(td);TV.day=S.days.includes(di)?di:S.days[0];
+  const b=$('stBody');
+  if(STV.view==='class'){TV.view='week';b.innerHTML=`<div class="card">${ttTable('class',STV.cid,false)}</div>`;return;}
+  if(!STV.tid){b.innerHTML='<div class="note">👆 Choose your name above.</div>';return;}
+  if(STV.view==='week'){TV.view='week';b.innerHTML=`<div class="card">${ttTable('teacher',STV.tid,false)}</div><div class="row"><button class="btn sec" onclick="printOne('teacher','${STV.tid}')">🖨️ Print / PDF</button></div>`;return;}
+  b.innerHTML=staffToday(td);}
+function staffDay(tid,ds){const di=dayIdx(ds),A_=A(),CM=C(),out=[];if(di<0||!S.days.includes(di))return null;const adj=S.adjust[ds]||{absent:[],subs:{}};const absent=(adj.absent||[]).includes(tid);
+  S.classes.forEach(c=>{const s=S.shifts[c.shift];if(!s)return;s.periods.forEach((p,i)=>{const cell=(S.tt[c.id]||{})[SK(di,i)];const a=cell&&A_[cell.a];const key=c.id+'|'+i;
+    if(a&&TIDS(a).includes(tid))out.push({sh:c.shift,i,time:p,cls:c,a,kind:absent?'off':'own',sub:adj.subs&&adj.subs[key]});
+    else if(adj.subs&&adj.subs[key]===tid&&a)out.push({sh:c.shift,i,time:p,cls:c,a,kind:'sub',forT:TIDS(a).filter(x=>(adj.absent||[]).includes(x))});});});
+  out.sort((x,y)=>(x.sh+x.i).localeCompare(y.sh+y.i));return {list:out,absent};}
+function staffToday(ds){const r=staffDay(STV.tid,ds),TM=T(),t=TM[STV.tid]||{};const dn=new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
+  if(!r)return `<div class="note">📅 ${dn} – no school today.</div>`;
+  let h=`<div class="card"><h3>${esc(t.name||'')} · ${dn}</h3>`+(r.absent?'<p class="note">🏖️ You are marked absent today – your classes are taken by others.</p>':'');
+  if(!r.list.length)h+='<p class="muted">No class today. 🙂</p>';
+  else h+=`<table class="list"><tr><th>Period</th><th>Time</th><th>Class</th><th>Subject</th><th></th></tr>${r.list.map(x=>`<tr style="${x.kind==='sub'?'background:#fef3c7':x.kind==='off'?'opacity:.5;text-decoration:line-through':''}"><td><b>P${x.i+1}</b></td><td>${esc(x.time[0])} – ${esc(x.time[1])}</td><td><b>${esc(x.cls.name)}</b>${clsRoom(x.cls)?' <span class="muted">('+esc(clsRoom(x.cls))+')</span>':''}</td><td>${esc(aName(x.a))}</td><td>${x.kind==='sub'?'🔁 Substitution'+(x.forT&&x.forT.length?' for '+esc(x.forT.map(i=>(TM[i]||{}).name||'').join(', ')):''):x.kind==='off'?(x.sub?'taken by '+esc((TM[x.sub]||{}).name||''):''):''}</td></tr>`).join('')}</table>`;
+  const subs=r.list.filter(x=>x.kind==='sub').length;if(subs)h+=`<p class="note" style="margin-top:8px">🔁 You have <b>${subs}</b> substitution period${subs>1?'s':''} today.</p>`;
+  h+=`<div class="row" style="margin-top:8px"><a class="btn green" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(staffWA(ds))}">💬 Share on WhatsApp</a></div></div>`;
+  const nx=new Date(ds+'T00:00:00');for(let k=1;k<8;k++){nx.setDate(nx.getDate()+1);const n=nx.getFullYear()+'-'+String(nx.getMonth()+1).padStart(2,'0')+'-'+String(nx.getDate()).padStart(2,'0');const rr=staffDay(STV.tid,n);if(rr){const subsN=rr.list.filter(x=>x.kind==='sub').length;
+    h+=`<div class="card"><h3>Next: ${new Date(n+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'})}</h3><p>${rr.list.filter(x=>x.kind!=='off').map(x=>`P${x.i+1} ${esc(x.cls.name)} ${esc(aCode(x.a))}${x.kind==='sub'?' 🔁':''}`).join(' · ')||'No class'}</p>${subsN?`<p class="note">🔁 ${subsN} substitution(s)</p>`:''}</div>`;break;}}
+  return h;}
+function staffWA(ds){const r=staffDay(STV.tid,ds),t=T()[STV.tid]||{};if(!r)return '';const dn=new Date(ds+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
+  return `*${t.name}* – ${dn}\n`+(r.list.length?r.list.map(x=>`P${x.i+1} (${x.time[0]}) ${x.cls.name} – ${aName(x.a)}${x.kind==='sub'?' 🔁 substitution':''}${x.kind==='off'?' (absent)':''}`).join('\n'):'No class today')+`\n\n_${S.school.name}_`;}
+if(STAFF){try{applyTheme();}catch(e){}staffInit();}else{load();autoSeason();LASTJ=JSON.stringify(S);applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
+try{cloudInit();}catch(e){}}
 </script>
 </body>
 </html>
