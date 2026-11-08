@@ -793,6 +793,40 @@ function autoBalance(S){const T=teacherMap(S),done=[],used={};
     if(!moved)break;}
   const L=teacherLoad(S);const left=S.teachers.filter(t=>{const m=maxWeekOf(S,t);return m&&(L[t.id]||0)>m;}).map(t=>({t:t.id,l:L[t.id],m:maxWeekOf(S,t)}));
   return {done,left};}
+
+/* ---- class / section balance check ----
+   Sections of the same class (VI-A, VI-B, VI-C) should get the same periods in each subject.
+   A fix moves 1 period between two subjects of the SAME section (class total stays the same). */
+function gradeOf(name){const m=String(name).match(/^(.*?)[\s\-]+[A-Z]$/i);return m?m[1].trim():String(name).trim();}
+function balKey(a){return a.subject+(a.s2?'/'+a.s2:'');}
+function sectionBalance(S,ids){const C=classMap(S),want=ids?new Set(ids):null,groups={};
+  S.classes.forEach(c=>{if(want&&!want.has(c.id))return;(groups[c.shift+'|'+gradeOf(c.name)]=groups[c.shift+'|'+gradeOf(c.name)]||[]).push(c);});
+  const out=[];
+  for(const gk in groups){const cls=groups[gk];if(cls.length<2)continue;const keys=new Set();const val={};
+    const single=new Set();cls.forEach(c=>S.alloc.forEach(a=>{if(a.classId===c.id&&!a.fixed&&!a.s2)single.add(a.subject);}));
+    const keyOf=a=>{if(!a.s2)return a.subject;if(single.has(a.s2)&&!single.has(a.subject))return a.s2;if(single.has(a.subject))return a.subject;return balKey(a);};
+    cls.forEach(c=>{val[c.id]={};S.alloc.filter(a=>a.classId===c.id&&!a.fixed).forEach(a=>{const k=keyOf(a);keys.add(k);val[c.id][k]=(val[c.id][k]||0)+(+a.ppw||0);});});
+    out.keyOf=out.keyOf||{};cls.forEach(c=>out.keyOf[c.id]=keyOf);
+    const subs=[];keys.forEach(k=>{const vs=cls.map(c=>val[c.id][k]||0);const cnt={};vs.forEach(v=>cnt[v]=(cnt[v]||0)+1);
+      let target=vs[0],best=-1;Object.keys(cnt).forEach(v=>{v=+v;if(cnt[v]>best||(cnt[v]===best&&v>target)){best=cnt[v];target=v;}});
+      const ok=vs.every(v=>v===target);subs.push({k,vals:cls.map(c=>({cid:c.id,v:val[c.id][k]||0})),target,ok});});
+    const bad=subs.filter(x=>!x.ok);
+    out.push({grade:gk.split('|')[1],shift:gk.split('|')[0],classes:cls.map(c=>c.id),subs,bad});}
+  return out;}
+function sectionFixes(S,ids){const L=teacherLoad(S),T=teacherMap(S),fixes=[];
+  const SB=sectionBalance(S,ids);SB.forEach(g=>{g.classes.forEach(cid=>{const plus=[],minus=[];
+    g.bad.forEach(x=>{const v=x.vals.find(y=>y.cid===cid).v,d=v-x.target;for(let i=0;i<Math.abs(d);i++)(d>0?plus:minus).push(x.k);});
+    while(plus.length&&minus.length){const kp=plus.shift(),km=minus.shift();
+      const ko=SB.keyOf[cid]||balKey;const rp=S.alloc.find(a=>a.classId===cid&&!a.fixed&&ko(a)===kp&&(+a.ppw||0)>=1),rm=S.alloc.find(a=>a.classId===cid&&!a.fixed&&ko(a)===km);
+      if(!rp||!rm)continue;const gain=[rm.teacherId,rm.t2].filter(Boolean),lose=[rp.teacherId,rp.t2].filter(Boolean);
+      const over=gain.filter(t=>!lose.includes(t)&&maxWeekOf(S,T[t])&&(L[t]||0)+1>maxWeekOf(S,T[t]));
+      fixes.push({cid,from:rp.id,to:rm.id,kp,km,lose,gain,over});}
+    plus.forEach(k=>fixes.push({cid,only:'minus',k}));minus.forEach(k=>fixes.push({cid,only:'plus',k}));});});
+  return fixes;}
+function applySectionFix(S,f){const a=S.alloc.find(x=>x.id===f.from),b=S.alloc.find(x=>x.id===f.to);if(!a||!b||(+a.ppw||0)<1)return false;
+  a.ppw=+a.ppw-1;b.ppw=+b.ppw+1;if(a.ppw===0&&!a.fixed)S.alloc=S.alloc.filter(x=>x!==a);return true;}
+function parallelIssues(S){const C=classMap(S),out=[];S.classes.forEach(c=>{const m=S.alloc.filter(a=>a.classId===c.id&&a.subject==='MIZ'&&!a.s2),b=S.alloc.filter(a=>a.classId===c.id&&a.subject==='BEN'&&!a.s2);
+  if(m.length&&b.length){const pm=m.reduce((x,a)=>x+(+a.ppw||0),0),pb=b.reduce((x,a)=>x+(+a.ppw||0),0);out.push({cid:c.id,miz:pm,ben:pb,same:pm===pb});}});return out;}
 /* ---- checks before generate ---- */
 function checkAll(S){const out=[],A=allocMap(S),C=classMap(S),T=teacherMap(S),L=teacherLoad(S);
   const add=(lvl,msg,where)=>out.push({lvl,msg,where:where||''});
@@ -1678,9 +1712,9 @@ function setCT(cid,tid){const c=C()[cid];c.ct=tid;save();}
 /* ---- reports ---- */
 let repTab='load';
 function renderReports(){
-  const tabs=[['load','👩‍🏫 Teacher workload'],['classes','🎓 Class status'],['csum','📋 Class subject summary'],['clash','⚠️ Clashes'],['subj','📚 Subject-wise teachers']];
+  const tabs=[['load','👩‍🏫 Teacher workload'],['classes','🎓 Class status'],['csum','📋 Class subject summary'],['sbal','⚖️ Balance check'],['clash','⚠️ Clashes'],['subj','📚 Subject-wise teachers']];
   $('repTabs').innerHTML=tabs.map(t=>`<button class="${t[0]===repTab?'act':''}" onclick="repTab='${t[0]}';renderReports()">${t[1]}</button>`).join('')+`<button onclick="printReport()">🖨️ Print</button>`;
-  $('repBody').innerHTML=(repTab==='csum'?csumBar():'')+reportHtml(repTab);
+  $('repBody').innerHTML=(repTab==='csum'||repTab==='sbal'?csumBar(repTab==='sbal'):'')+reportHtml(repTab);
 }
 function reportHtml(tab){
   const AM=A(),TM=T(),CM=C(),idx=busyIndex(S);
@@ -1697,6 +1731,7 @@ function reportHtml(tab){
     if(!cl.length)return '<div class="note ok">✅ No teacher clash in the routine.</div>'+rh;
     return `<div class="tw"><table class="list"><tr><th>Teacher</th><th>Day</th><th>Shift</th><th>Period</th><th>Classes</th></tr>`+cl.map(x=>`<tr><td>${esc(x.teacher)}</td><td>${DAY_NAMES[x.d]}</td><td>${esc(S.shifts[x.shift].name)}</td><td>P${x.p+1}</td><td>${x.classes.map(c=>esc(CM[c].name)).join(', ')}</td></tr>`).join('')+'</table></div>'+rh;}
   if(tab==='csum')return csumHtml();
+  if(tab==='sbal')return sbalHtml();
   if(tab==='subj'){let h=`<div class="tw"><table class="list"><tr><th>Subject</th><th>Teachers (classes)</th><th>Periods/wk</th></tr>`;
     S.subjects.forEach(s=>{const al=S.alloc.filter(a=>a.subject===s.code);if(!al.length&&!S.alloc.some(a=>a.s2===s.code))return;const by={};al.forEach(a=>{(by[a.teacherId]=by[a.teacherId]||[]).push(CM[a.classId]?.name);});S.alloc.filter(a=>a.s2===s.code&&a.t2).forEach(a=>{(by[a.t2]=by[a.t2]||[]).push(CM[a.classId]?.name);});
       h+=`<tr><td><b>${esc(s.name)}</b></td><td>${Object.entries(by).map(([t,cs])=>`${esc((TM[t]||{}).abbr||'?')}: ${esc(cs.join(', '))}`).join('<br>')}</td><td>${al.reduce((x,a)=>x+(+a.ppw||0),0)}</td></tr>`;});return h+'</table></div>';}
@@ -1706,7 +1741,7 @@ function reportHtml(tab){
 
 /* ---- class & section-wise subject summary ---- */
 let CSUM={sh:'all',view:'cards'};
-function csumBar(){return `<div class="row" style="margin-bottom:10px"><label>Shift <select onchange="CSUM.sh=this.value;renderReports()"><option value="all">All</option>${shifts().map(sh=>`<option value="${sh}" ${CSUM.sh===sh?'selected':''}>${esc(S.shifts[sh].name)}</option>`).join('')}</select></label>
+function csumBar(sb){if(sb)return `<div class="row" style="margin-bottom:10px"><label>Shift <select onchange="CSUM.sh=this.value;renderReports()"><option value="all">All</option>${shifts().map(sh=>`<option value="${sh}" ${CSUM.sh===sh?'selected':''}>${esc(S.shifts[sh].name)}</option>`).join('')}</select></label></div>`;return `<div class="row" style="margin-bottom:10px"><label>Shift <select onchange="CSUM.sh=this.value;renderReports()"><option value="all">All</option>${shifts().map(sh=>`<option value="${sh}" ${CSUM.sh===sh?'selected':''}>${esc(S.shifts[sh].name)}</option>`).join('')}</select></label>
   <label>View <select onchange="CSUM.view=this.value;renderReports()"><option value="cards" ${CSUM.view==='cards'?'selected':''}>Class by class (with teachers)</option><option value="grid" ${CSUM.view==='grid'?'selected':''}>One table – all classes</option></select></label>
   <button class="btn sec" onclick="csumCSV()">⬇️ Excel (CSV)</button></div>`;}
 function csumClasses(){return S.classes.filter(c=>CSUM.sh==='all'||c.shift===CSUM.sh);}
@@ -1734,6 +1769,41 @@ function csumHtml(){const cls=csumClasses(),TM=T();if(!cls.length)return '<p cla
 function csumCSV(){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';let out=['Class,Shift,Class teacher,Subject,Periods per week,Teacher'];const TM=T();
   csumClasses().forEach(c=>{const rs=csumRows(c.id);rs.forEach(r=>out.push([c.name,S.shifts[c.shift].name,(TM[c.ct]||{}).name||'',r.name,r.p,r.t].map(q).join(',')));out.push([c.name,'','','TOTAL',rs.reduce((x,r)=>x+r.p,0),''].map(q).join(','));});
   download('Class_Subject_Summary.csv','﻿'+out.join('\r\n'),'text/csv');}
+
+function sbalHtml(){const cls=csumClasses(),ids=cls.map(c=>c.id),CM=C(),TM=T(),L=teacherLoad(S);let h='';
+  const sname=k=>k.split('/').map(x=>subj(x).name).join(' / ');
+  const tn=ts=>ts.map(t=>esc((TM[t]||{}).name||'?')).join(' / ');
+  // 1. class totals
+  const tot=cls.map(c=>{const al=S.alloc.filter(a=>a.classId===c.id).reduce((x,a)=>x+(+a.ppw||0),0),sl=S.days.length*nPer(S,c.shift),pl=Object.keys(S.tt[c.id]||{}).length;return {c,al,sl,pl};});
+  const badT=tot.filter(x=>x.al!==x.sl),badP=tot.filter(x=>x.al===x.sl&&x.pl!==x.al);
+  const groups=sectionBalance(S,ids),fixes=sectionFixes(S,ids),pairs=fixes.filter(f=>!f.only),odd=fixes.filter(f=>f.only),par=parallelIssues(S).filter(x=>ids.includes(x.cid));
+  const nBad=badT.length+groups.reduce((x,g)=>x+g.bad.length,0)+par.filter(x=>!x.same).length;
+  h+=`<div class="kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <div class="card" style="margin:0;padding:10px 14px"><div class="muted">Class totals</div><b style="font-size:20px;color:${badT.length?'var(--red)':'var(--green)'}">${badT.length?badT.length+' not full':'All full ✓'}</b></div>
+    <div class="card" style="margin:0;padding:10px 14px"><div class="muted">Sections not equal</div><b style="font-size:20px;color:${groups.some(g=>g.bad.length)?'#b45309':'var(--green)'}">${groups.reduce((x,g)=>x+g.bad.length,0)||'None ✓'}</b></div>
+    <div class="card" style="margin:0;padding:10px 14px"><div class="muted">Mizo ≠ Bengali</div><b style="font-size:20px;color:${par.some(x=>!x.same)?'#b45309':'var(--green)'}">${par.filter(x=>!x.same).length||'None ✓'}</b></div>
+    <div class="card" style="margin:0;padding:10px 14px"><div class="muted">Routine out of date</div><b style="font-size:20px;color:${badP.length?'#b45309':'var(--green)'}">${badP.length?badP.length+' class(es)':'No ✓'}</b></div></div>`;
+  if(!nBad&&!badP.length)h+='<div class="note ok">✅ Everything is balanced: every class has a full week and all sections of a class get the same periods in each subject.</div>';
+  // totals
+  if(badT.length)h+=`<div class="card"><h3>1. Class total not equal to the week</h3><table class="list"><tr><th>Class</th><th>Periods given</th><th>Week has</th><th>Do this</th><th></th></tr>${badT.map(x=>`<tr><td><b>${esc(x.c.name)}</b></td><td>${x.al}</td><td>${x.sl}</td><td>${x.al<x.sl?'Add '+(x.sl-x.al)+' period(s) to a subject':'Remove '+(x.al-x.sl)+' period(s)'}</td><td><a href="#setup" onclick="setupTab='alloc';allocCls='${x.c.id}';go('setup');return false">Open Allocation</a></td></tr>`).join('')}</table></div>`;
+  // sections
+  groups.filter(g=>g.bad.length).forEach(g=>{
+    h+=`<div class="card"><h3>2. Class ${esc(g.grade)} – sections not equal</h3><div class="tw"><table class="list"><tr><th>Subject</th>${g.classes.map(c=>`<th>${esc(CM[c].name)}</th>`).join('')}<th>Should be</th></tr>${g.bad.map(x=>`<tr><td>${esc(sname(x.k))}</td>${x.vals.map(v=>`<td style="${v.v!==x.target?'background:#fef3c7;font-weight:700;color:#b45309':''}">${v.v}${v.v!==x.target?(v.v>x.target?' ▲':' ▼'):''}</td>`).join('')}<td><b>${x.target}</b></td></tr>`).join('')}</table></div>`;
+    const fx=pairs.filter(f=>g.classes.includes(f.cid));
+    if(fx.length)h+=`<p class="muted" style="margin:8px 0 4px">Quick fixes (moves 1 period inside the same section, so the class total does not change):</p><table class="list"><tr><th>Section</th><th>Change</th><th>Teacher effect</th><th></th></tr>${fx.map(f=>`<tr><td><b>${esc(CM[f.cid].name)}</b></td><td>${esc(sname(f.kp))} −1 · ${esc(sname(f.km))} +1</td><td style="font-size:12px">${tn(f.lose)} ${f.lose.map(t=>(L[t]||0)+'→'+((L[t]||0)-1)).join('/')} · ${tn(f.gain)} ${f.gain.map(t=>(L[t]||0)+'→'+((L[t]||0)+1)).join('/')}${f.over.length?' <span class="pill r">over limit</span>':''}</td><td>${isAdmin?`<button class="btn sm" onclick="doSecFix('${f.from}','${f.to}')">Apply</button>`:''}</td></tr>`).join('')}</table>`;
+    const od=odd.filter(f=>g.classes.includes(f.cid));
+    if(od.length)h+=`<p class="note" style="margin-top:6px">No partner subject in the same section for: ${od.map(f=>esc(CM[f.cid].name)+' '+esc(sname(f.k))+(f.only==='minus'?' (one too many)':' (one too few)')).join(', ')}. Change these by hand in <a href="#setup" onclick="setupTab='alloc';allocCls='${od[0].cid}';go('setup');return false">Allocation</a>.</p>`;
+    h+='</div>';});
+  if(pairs.length&&isAdmin)h+=`<div class="row" style="margin:6px 0 12px"><button class="btn gold" onclick="doSecFixAll()">⚖️ Make all sections equal (${pairs.filter(f=>!f.over.length).length} fix${pairs.filter(f=>!f.over.length).length===1?'':'es'})</button><span class="muted">Skips fixes that would put a teacher over the weekly limit. Undo (top right) takes it back.</span></div>`;
+  // mizo/bengali
+  const pb=par.filter(x=>!x.same);
+  if(pb.length)h+=`<div class="card"><h3>3. Mizo and Bengali not equal</h3><p class="muted">Mizo and Bengali are taught in the same period (class split in two), so they should have the same number of periods.</p><table class="list"><tr><th>Class</th><th>Mizo</th><th>Bengali</th><th></th></tr>${pb.map(x=>`<tr><td><b>${esc(CM[x.cid].name)}</b></td><td>${x.miz}</td><td>${x.ben}</td><td><a href="#setup" onclick="setupTab='alloc';allocCls='${x.cid}';go('setup');return false">Open Allocation</a></td></tr>`).join('')}</table></div>`;
+  if(badP.length)h+=`<div class="note">🔄 The routine of ${badP.map(x=>esc(x.c.name)).join(', ')} does not match Allocation (periods were changed). Go to <a href="#generate" onclick="go('generate');return false">Auto Generate</a> and click Noon / Morning shift only.</div>`;
+  return h;}
+function doSecFix(f,t){if(!needAdmin())return;if(applySectionFix(S,{from:f,to:t})){logAct('Section balance: 1 period moved');save();renderReports();toast('⚖️ Done – remake the routine in Auto Generate when finished');}}
+function doSecFixAll(){if(!needAdmin())return;ask('Make all sections equal now? Fixes that would put a teacher over the weekly limit are skipped.',()=>{saveVersion('Before section balance');let n=0;
+  for(let g=0;g<200;g++){const f=sectionFixes(S,csumClasses().map(c=>c.id)).find(x=>!x.only&&!x.over.length);if(!f)break;if(!applySectionFix(S,f))break;n++;}
+  logAct(`Section balance: ${n} fix(es)`);save();renderReports();toast(`⚖️ ${n} fix(es) done – now remake the routine in Auto Generate`);});}
 /* ---- print ---- */
 function pHead(t,sub){return `<div class="ph" style="display:flex;align-items:center;justify-content:center;gap:14px;text-align:center;margin-bottom:8px"><img src="${$('logoImg').src}" style="width:70px;height:70px"><div><h2 style="margin:0">${esc(S.school.name)}</h2><div>${esc(S.school.address)} · Session ${esc(S.school.session)} · ${seasonTag().replace(/^\S+ /,'')}</div><h3 style="margin:6px 0 2px">${t}</h3>${sub?`<div>${sub}</div>`:''}</div><div style="width:70px"></div></div>`;}
 const sig=()=>`<div class="sig"><span>Time Table In-charge</span><span>${esc(S.school.principal||'Principal')}</span></div>`;
@@ -1746,7 +1816,7 @@ function printTeacher(all){const ids=all?S.teachers.map(t=>t.id):[TV.mode==='tea
 function printMaster(){const d=+$('mDay').value,sh=$('mShift').value;doPrint(`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,$('mMode').value)}${sig()}</div>`);}
 function printAdjust(){if(!ADJ.absent.length){toast('Nothing to print');return;}const TM=T(),d=dayIdx(ADJ.date);
   doPrint(`<div class="pg">${pHead('PERIOD ADJUSTMENT – '+(d>=0?DAY_NAMES[d]:'')+', '+fmtDate(ADJ.date),'Absent: '+ADJ.absent.map(t=>esc(TM[t].name)).join(', '))}<table><tr><th>Shift</th><th>Period</th><th>Time</th><th>Class</th><th>Subject</th><th>Absent teacher</th><th>Substitute</th><th>Signature</th></tr>${adjRows().map(r=>`<tr><td>${esc(S.shifts[r.sh].name)}</td><td>P${r.p+1}</td><td>${ptime(r.sh,r.p)}</td><td>${esc(r.c.name)}</td><td>${esc(subj(tSub(r.a,r.tid)).name)}</td><td>${esc(TM[r.tid||r.a.teacherId].name)}</td><td><b>${esc((TM[ADJ.subs[r.key]]||{}).name||'')}</b></td><td style="width:90px"></td></tr>`).join('')}</table>${sig()}</div>`);}
-function printReport(){doPrint(`<div class="pg">${pHead(repTab==='csum'?'CLASS & SECTION-WISE SUBJECT SUMMARY':'REPORT',repTab==='csum'&&CSUM.sh!=='all'?esc(S.shifts[CSUM.sh].name):'')}${reportHtml(repTab)}</div>`);}
+function printReport(){doPrint(`<div class="pg">${pHead(repTab==='csum'?'CLASS & SECTION-WISE SUBJECT SUMMARY':repTab==='sbal'?'CLASS & SECTION BALANCE CHECK':'REPORT',(repTab==='csum'||repTab==='sbal')&&CSUM.sh!=='all'?esc(S.shifts[CSUM.sh].name):'')}${reportHtml(repTab)}</div>`);}
 
 /* ---- backup / export ---- */
 let DL=null;try{if(window.claude&&window.claude.use)window.claude.use('downloads').then(d=>{DL=d;}).catch(()=>{});}catch(e){}
