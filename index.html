@@ -357,7 +357,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
    <label>Same subject max / day<input type="number" min="1" max="4" id="gMax" style="width:90px"></label>
    <label>Teacher max periods / day<input type="number" min="1" max="10" id="gTMax" style="width:90px"></label>
    <label>Teacher max periods / week<input type="number" min="1" max="45" id="gWk" style="width:90px"></label>
-   <label>Max periods in a row<input type="number" min="0" max="8" id="gRow" style="width:90px" title="Soft rule: tries not to give a teacher more periods one after another (0 = off)"></label>
+   <label>Max periods in a row (no break)<input type="number" min="0" max="8" id="gRow" style="width:90px" title="A teacher should not get more than this many periods one after another without a break. Example: 2 = no P5-P6-P7. One more is allowed across a break (e.g. P3-P4 | Lunch | P5). 0 = off"></label>
    <label>Attempts<input type="number" min="1" max="200" id="gAtt" style="width:90px"></label>
    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="gCT"> Class teacher takes 1st period</label>
    <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)" title="Maths, Science, English in the middle periods; Music, EVS and other light subjects towards the last period"><input type="checkbox" id="gSP"> Difficult subjects in middle periods</label>
@@ -372,7 +372,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
   <div class="row">
    <button class="btn red" onclick="clearTT()">🗑️ Clear routine (keep locked)</button>
    <button class="btn sec" onclick="unlockAll()">🔓 Unlock all manual periods</button>
-   <button class="btn sec" onclick="undoGen()" id="undoBtn" disabled>↩️ Undo last generate</button>
+   <button class="btn sec" onclick="fixRunsNow()" title="Keeps the present routine and your locked periods; only moves periods inside each class so no teacher has too many periods in a row">⏱️ Fix periods in a row</button><button class="btn sec" onclick="undoGen()" id="undoBtn" disabled>↩️ Undo last generate</button>
   </div>
  </div>
  <div id="gCheck"></div>
@@ -614,7 +614,7 @@ function generate(S,opt){
       if(L&&A[L.a]&&A[L.a].subject===a.subject)s+=4;if(Rr&&A[Rr.a]&&A[Rr.a].subject===a.subject)s+=4;
       s+=posPen(S,a,p,np);
       const mr=+S.settings.maxRow||0;
-      if(mr){const sh=C[cid].shift;for(const tid of TIDS(a)){let run=1;for(let q=p-1;q>=0&&busy[bk(tid,sh,d,q)];q--)run++;for(let q=p+1;q<np&&busy[bk(tid,sh,d,q)];q++)run++;if(run>mr)s+=6*(run-mr);}}
+      if(mr){const sh=C[cid].shift,blk=breakBlocks(S,sh);for(const tid of TIDS(a)){let run=1;for(let q=p-1;q>=0&&busy[bk(tid,sh,d,q)]&&blk[q]===blk[p];q--)run++;for(let q=p+1;q<np&&busy[bk(tid,sh,d,q)]&&blk[q]===blk[p];q++)run++;if(run>mr)s+=10*(run-mr);let all=1;for(let q=p-1;q>=0&&busy[bk(tid,sh,d,q)];q--)all++;for(let q=p+1;q<np&&busy[bk(tid,sh,d,q)];q++)all++;if(all>mr+1)s+=3*(all-mr-1);}}
       return s+R()*3;
     }
     // class teacher first period
@@ -709,10 +709,67 @@ function generate(S,opt){
     if(!best||sc<best.sc)best={tt,unplaced,sc,attempt:at+1};
     if(unplaced.length===0&&spread===0&&edge===0)break;
   }
+  if(+S.settings.maxRow)best.tt=improveRuns(S,best.tt,target,(opt.seed||Date.now())+13);
   const summary={};best.unplaced.forEach(aid=>summary[aid]=(summary[aid]||0)+1);
   return {tt:best.tt,unplaced:summary,unplacedTotal:best.unplaced.length,attempt:best.attempt};
 }
 
+
+/* ---- teacher periods in a row (break-aware) ----
+   Breaks split the day into blocks. With "Max periods in a row" = 2 a teacher
+   should not get 3 periods one after another with no break between them
+   (e.g. P5-P6-P7). Across a break one more is allowed (e.g. P3-P4 | lunch | P5). */
+function breakBlocks(S,sh){const np=nPer(S,sh),br=new Set(((S.shifts[sh]||{}).breaks||[]).map(b=>+b.after));const out=[];let b=0;for(let p=0;p<np;p++){if(p>0&&br.has(p))b++;out.push(b);}return out;}
+function runPenalty(S,busyFn,tid,sh,d){const mr=+S.settings.maxRow||0;if(!mr)return 0;const np=nPer(S,sh),blk=breakBlocks(S,sh);let s=0,run=0,all=0;
+  for(let p=0;p<=np;p++){const b=p<np&&busyFn(tid,sh,d,p);
+    if(b&&p>0&&blk[p]!==blk[p-1]){if(run>mr)s+=10*(run-mr)*(run-mr);run=0;}
+    if(b){run++;all++;}else{if(run>mr)s+=10*(run-mr)*(run-mr);if(all>mr+1)s+=3*(all-mr-1)*(all-mr-1);run=0;all=0;}}
+  return s;}
+function runReport(S,ids){const mr=+S.settings.maxRow||0;const A=allocMap(S),C=classMap(S),want=new Set(ids||S.classes.map(c=>c.id));const busy={},keys=new Set();
+  for(const cid in S.tt){if(!C[cid])continue;const sh=C[cid].shift;for(const k in S.tt[cid]){const a=A[S.tt[cid][k].a];if(!a||a.fixed)continue;const [d,p]=k.split('|');TIDS(a).forEach(t=>{busy[t+'|'+sh+'|'+d+'|'+p]=1;if(want.has(cid))keys.add(t+'|'+sh+'|'+d);});}}
+  let bad=0;const who=[];if(!mr)return {bad,who,mr};
+  keys.forEach(k=>{const [t,sh,d]=k.split('|');const np=nPer(S,sh),blk=breakBlocks(S,sh);let run=0,mx=0;for(let p=0;p<np;p++){if(busy[t+'|'+sh+'|'+d+'|'+p]&&(run===0||blk[p]===blk[p-1]))run++;else run=busy[t+'|'+sh+'|'+d+'|'+p]?1:0;mx=Math.max(mx,run);}if(mx>mr){bad++;who.push({t,d:+d});}});
+  return {bad,who,mr};}
+function improveRuns(S,tt0,target,seed){
+  const A=allocMap(S),C=classMap(S),T=teacherMap(S),R=rng(seed);const maxSame=+S.settings.maxSame||2;const days=S.days.slice();
+  const tt={};for(const cid in tt0){tt[cid]={};for(const k in tt0[cid])tt[cid][k]=tt0[cid][k];}
+  const busy={},tDay={},sDay={},rB={};const bk=(t,sh,d,p)=>t+'|'+sh+'|'+d+'|'+p;
+  const unav={};S.teachers.forEach(t=>unav[t.id]=new Set(t.unavail||[]));
+  function mark(cid,d,p,aid,v){const a=A[aid],sh=C[cid].shift;TIDS(a).forEach(t=>{busy[bk(t,sh,d,p)]=(busy[bk(t,sh,d,p)]||0)+v;if(!a.fixed)tDay[t+'|'+d]=(tDay[t+'|'+d]||0)+v;});
+    sDay[cid+'|'+d+'|'+a.subject]=(sDay[cid+'|'+d+'|'+a.subject]||0)+v;
+    if(a.room){const k=a.room+'|'+sh+'|'+d+'|'+p;rB[k]=(rB[k]||0)+v;}if(a.s2&&a.room2){const k=a.room2+'|'+sh+'|'+d+'|'+p;rB[k]=(rB[k]||0)+v;}}
+  for(const cid in tt){if(!C[cid])continue;for(const k in tt[cid]){if(!A[tt[cid][k].a])continue;const [d,p]=k.split('|');mark(cid,+d,+p,tt[cid][k].a,1);}}
+  const isB=(t,sh,d,p)=>(busy[bk(t,sh,d,p)]||0)>0;
+  function canPut(cid,d,p,aid){const a=A[aid],sh=C[cid].shift;
+    if((sDay[cid+'|'+d+'|'+a.subject]||0)>=(+a.maxDay||maxSame))return false;
+    if(a.room&&rB[a.room+'|'+sh+'|'+d+'|'+p])return false;if(a.s2&&a.room2&&rB[a.room2+'|'+sh+'|'+d+'|'+p])return false;
+    for(const t of TIDS(a)){if(isB(t,sh,d,p))return false;if(unav[t]&&unav[t].has(sh+'|'+d+'|'+p))return false;
+      const tm=(T[t]&&+T[t].maxDay)||+S.settings.teacherMaxDay||99;if((tDay[t+'|'+d]||0)>=tm)return false;}
+    return true;}
+  const movable={};const cls=S.classes.filter(c=>target.has(c.id));
+  cls.forEach(c=>{movable[c.id]=[];const np=nPer(S,c.shift);for(const d of days)for(let p=0;p<np;p++){const cell=tt[c.id][SK(d,p)];
+    if(cell&&(cell.l||cell.ct||cell.fx||cell.g||cell.dp||!A[cell.a]||A[cell.a].fixed||A[cell.a].grp))continue;movable[c.id].push([d,p]);}});
+  const cand=cls.filter(c=>movable[c.id].length>1);if(!cand.length)return tt;
+  const W=6;const N=Math.min(500000,cand.length*25000);
+  for(let it=0;it<N;it++){
+    const c=cand[Math.floor(R()*cand.length)],cid=c.id,sh=c.shift,np=nPer(S,sh),mv=movable[cid];
+    const i1=Math.floor(R()*mv.length);let i2=Math.floor(R()*mv.length);if(i1===i2)continue;
+    const [d1,p1]=mv[i1],[d2,p2]=mv[i2];const k1=SK(d1,p1),k2=SK(d2,p2);const c1=tt[cid][k1],c2=tt[cid][k2];if(!c1&&!c2)continue;
+    const aff=new Set();[c1,c2].forEach(cc=>{if(cc)TIDS(A[cc.a]).forEach(t=>{aff.add(t+'|'+d1);aff.add(t+'|'+d2);});});
+    const cost=()=>{let s=0;aff.forEach(x=>{const [t,d]=x.split('|');s+=W*runPenalty(S,isB,t,sh,+d);});return s;};
+    const pp=(cc,p)=>cc&&S.settings.spread!==false?Math.max(0,posPen(S,A[cc.a],p,np)):0;
+    const before=cost()+pp(c1,p1)+pp(c2,p2);
+    if(c1){mark(cid,d1,p1,c1.a,-1);delete tt[cid][k1];}if(c2){mark(cid,d2,p2,c2.a,-1);delete tt[cid][k2];}
+    let good=true;
+    if(c1){if(canPut(cid,d2,p2,c1.a)){tt[cid][k2]=c1;mark(cid,d2,p2,c1.a,1);}else good=false;}
+    if(good&&c2){if(canPut(cid,d1,p1,c2.a)){tt[cid][k1]=c2;mark(cid,d1,p1,c2.a,1);}else good=false;}
+    if(good){const after=cost()+pp(c1,p2)+pp(c2,p1);const temp=Math.max(0.05,2*(1-it/N));
+      if(after<=before||R()<Math.exp(-(after-before)/temp))continue;}
+    if(tt[cid][k2]===c1&&c1){mark(cid,d2,p2,c1.a,-1);delete tt[cid][k2];}
+    if(tt[cid][k1]===c2&&c2){mark(cid,d1,p1,c2.a,-1);delete tt[cid][k1];}
+    if(c1){tt[cid][k1]=c1;mark(cid,d1,p1,c1.a,1);}if(c2){tt[cid][k2]=c2;mark(cid,d2,p2,c2.a,1);}
+  }
+  return tt;}
 /* ---- checks before generate ---- */
 function checkAll(S){const out=[],A=allocMap(S),C=classMap(S),T=teacherMap(S),L=teacherLoad(S);
   const add=(lvl,msg,where)=>out.push({lvl,msg,where:where||''});
@@ -989,7 +1046,7 @@ function doSwap(cid,d1,p1,d2,p2){
   if(after>before){ask('This swap makes a teacher clash (the teacher is busy in another class at that time). Keep it anyway?',()=>{save();render(curView);});
     $('cfY').insertAdjacentHTML('afterend','');document.querySelector('#mbox .btn.sec').onclick=()=>{if(a)tt[SK(d1,p1)]=a;else delete tt[SK(d1,p1)];if(b)tt[SK(d2,p2)]=b;else delete tt[SK(d2,p2)];closeModal();render(curView);};
     render(curView);return;}
-  logAct(`Swapped ${C()[cid].name} ${DAY_SHORT[d1]} P${p1+1} ⇄ ${DAY_SHORT[d2]} P${p2+1}`);save();render(curView);toast('⇄ Swapped & locked 🔒');}
+  logAct(`Swapped ${C()[cid].name} ${DAY_SHORT[d1]} P${p1+1} ⇄ ${DAY_SHORT[d2]} P${p2+1}`);save();render(curView);const AMr=A(),tids=new Set([a,b].filter(Boolean).flatMap(x=>TIDS(AMr[x.a]))),rw=runReport(S).who.filter(w=>tids.has(w.t)&&(w.d===d1||w.d===d2));toast(rw.length?`⇄ Swapped 🔒 – but ⏱️ ${rw.map(w=>esc((T()[w.t]||{}).name||'')+' '+DAY_SHORT[w.d]).join(', ')} now has more than ${S.settings.maxRow} periods in a row`:'⇄ Swapped & locked 🔒');}
 function lockCell(cid,d,p){const c=S.tt[cid][SK(d,p)];c.l=c.l?0:1;save();closeModal();render(curView);}
 
 /* ---- teacher view ---- */
@@ -1154,7 +1211,7 @@ function renderTT(){
     const rooms=new Set(Object.values(tt).map(c=>AM[c.a]?roomOf(S,TV.id,AM[c.a]):null).filter(Boolean));
     k=kc('📖','#dcfce7','Total Periods',Object.keys(tt).length,'Per Week')+kc('👤','#ede9fe','Total Teachers',new Set(al.map(a=>a.teacherId)).size,'Assigned')+kc('🚪','#dbeafe','Total Rooms',rooms.size,'In Use');}
   else if(TV.mode==='teacher'){const idx=busyIndex(S);let n=0;const cls=new Set();for(const key in idx)if(key.startsWith(TV.id+'|')){n++;idx[key].forEach(c=>cls.add(c));}
-    const td=dayIdx(today);k=kc('📖','#dcfce7','Periods',n,'Per Week')+kc('🎓','#ede9fe','Classes',cls.size,'Taught')+kc('📅','#dbeafe','Today',td>=0&&S.days.includes(td)?dayLoad(TV.id,td):0,'Periods today');}
+    const td=dayIdx(today);k=kc('📖','#dcfce7','Periods',n,'Per Week')+kc('🎓','#ede9fe','Classes',cls.size,'Taught')+kc('📅','#dbeafe','Today',td>=0&&S.days.includes(td)?dayLoad(TV.id,td):0,'Periods today')+(+S.settings.maxRow?(()=>{const w=runReport(S).who.filter(x=>x.t===TV.id);return kc('⏱️',w.length?'#fee2e2':'#dcfce7','In a row',w.length?w.map(x=>DAY_SHORT[x.d]).join(', '):'OK',w.length?'Too many without a break':'Max '+S.settings.maxRow+' without a break');})():'');}
   else{const ri=roomIndex(S);let n=0;const cls=new Set();for(const key in ri)if(key.startsWith(TV.id+'|')){n++;ri[key].forEach(c=>cls.add(c));}
     k=kc('📖','#dcfce7','Periods Used',n,'Per Week')+kc('🎓','#ede9fe','Classes',cls.size,'Using this room')+kc('⚠️','#fee2e2','Clashes',roomClashes(S).filter(x=>x.room===TV.id).length,'In this room');}
   k+=kc('⇄','#ffedd5','Substitutions Today',subsOn(today),'<a href="#adjust" style="color:inherit">View Details</a>')+kc('✔️','#dcfce7','Published Status',`<span style="color:${ps.c}">${ps.t}</span>`,ps.s);
@@ -1335,10 +1392,18 @@ function runGen(mode){
     let h=`<div class="note ${r.unplacedTotal?'err':'ok'}">${r.unplacedTotal?'⚠️':'✅'} ${ids.length} class(es) generated in ${((performance.now()-t0)/1000).toFixed(1)} s (best of attempt ${r.attempt}). ${r.unplacedTotal?r.unplacedTotal+' period(s) could not be placed.':'All periods placed with no teacher clash.'}</div>`;
     h+=changeHtml(changeReport(S,oldTT));
     if(S.settings.spread!==false){const sr=spreadReport(S);h+=`<div class="note">📊 Difficult subjects (Maths, Science, English…): <b>${sr.hard-sr.hardEdge} of ${sr.hard}</b> in middle periods, ${sr.hardEdge} in first/last period (only where it could not be avoided). Light subjects (Music, EVS…): <b>${sr.lightLast} of ${sr.light}</b> in the last two periods.</div>`;}
+    if(+S.settings.maxRow){const rr=runReport(S,ids);const DN=['Mon','Tue','Wed','Thu','Fri','Sat'];h+=rr.bad?`<div class="note">⏱️ Periods in a row: <b>${rr.bad}</b> teacher-day(s) still have more than ${rr.mr} periods one after another without a break: ${rr.who.slice(0,12).map(w=>esc((TM[w.t]||{}).name||w.t)+' ('+(DN[w.d]||w.d)+')').join(', ')}${rr.bad>12?'…':''}. Click Generate again to try another routine, or swap those periods by hand.</div>`:`<div class="note ok">⏱️ Periods in a row: no teacher has more than ${rr.mr} periods one after another without a break.</div>`;}
     if(r.unplacedTotal){h+='<div class="card"><h3>Not placed</h3><table class="list"><tr><th>Class</th><th>Subject</th><th>Teacher</th><th>Periods</th></tr>'+Object.entries(r.unplaced).map(([aid,n])=>{const a=AM[aid];return `<tr><td>${esc(CM[a.classId].name)}</td><td>${esc(subj(a.subject).name)}</td><td>${esc(TM[a.teacherId].name)}</td><td>${n}</td></tr>`;}).join('')+'</table><p class="muted">Tips: raise "Same subject max / day", raise attempts, reduce the teacher\'s load, or remove ⛔ unavailable slots. You can also place them by hand.</p></div>';}
     $('gResult').innerHTML=h;$('undoBtn').disabled=false;
   },30);
 }
+function fixRunsNow(){if(!needAdmin())return;if(!+S.settings.maxRow){const v=+$('gRow').value||0;if(!v){toast('Set "Max periods in a row (no break)" first, e.g. 2');return;}S.settings.maxRow=v;}
+  S.settings.maxRow=+$('gRow').value||S.settings.maxRow;
+  $('gResult').innerHTML='<div class="note">⏳ Moving periods… please wait.</div>';
+  setTimeout(()=>{const ids=S.classes.map(c=>c.id),b4=runReport(S,ids).bad;undoStack=JSON.stringify(S.tt);saveVersion('Before fixing periods in a row');
+    S.tt=improveRuns(S,S.tt,new Set(ids),Date.now());const rr=runReport(S,ids),TM=T(),DN=['Mon','Tue','Wed','Thu','Fri','Sat'];
+    logAct(`Fixed periods in a row (${b4} → ${rr.bad})`);save();$('undoBtn').disabled=false;
+    $('gResult').innerHTML=`<div class="note ${rr.bad?'':'ok'}">⏱️ Teacher-days with more than ${rr.mr} periods in a row (no break): <b>${b4} → ${rr.bad}</b>. Locked 🔒 and fixed ⭐ periods were not moved.${rr.bad?' Still: '+rr.who.slice(0,12).map(w=>esc((TM[w.t]||{}).name||w.t)+' ('+(DN[w.d]||w.d)+')').join(', ')+'. Click again, or swap those by hand in Timetable → Class.':''}</div>`;},30);}
 function undoGen(){if(!undoStack)return;S.tt=JSON.parse(undoStack);undoStack=null;save();renderGenerate();$('gResult').innerHTML='<div class="note ok">↩️ Restored previous routine.</div>';}
 function unlockAll(){if(!needAdmin())return;ask('Unlock every locked period? Next Auto Generate may move them.',()=>{for(const c in S.tt)for(const k in S.tt[c])if(!S.tt[c][k].fx)S.tt[c][k].l=0;save();toast('🔓 All unlocked');});}
 function clearTT(){if(!needAdmin())return;ask('Clear all periods that are not locked?',()=>{undoStack=JSON.stringify(S.tt);for(const c in S.tt)for(const k in S.tt[c])if(!S.tt[c][k].l)delete S.tt[c][k];save();renderGenerate();toast('Cleared');});}
