@@ -1678,9 +1678,9 @@ function setCT(cid,tid){const c=C()[cid];c.ct=tid;save();}
 /* ---- reports ---- */
 let repTab='load';
 function renderReports(){
-  const tabs=[['load','👩‍🏫 Teacher workload'],['classes','🎓 Class status'],['clash','⚠️ Clashes'],['subj','📚 Subject-wise teachers']];
+  const tabs=[['load','👩‍🏫 Teacher workload'],['classes','🎓 Class status'],['csum','📋 Class subject summary'],['clash','⚠️ Clashes'],['subj','📚 Subject-wise teachers']];
   $('repTabs').innerHTML=tabs.map(t=>`<button class="${t[0]===repTab?'act':''}" onclick="repTab='${t[0]}';renderReports()">${t[1]}</button>`).join('')+`<button onclick="printReport()">🖨️ Print</button>`;
-  $('repBody').innerHTML=reportHtml(repTab);
+  $('repBody').innerHTML=(repTab==='csum'?csumBar():'')+reportHtml(repTab);
 }
 function reportHtml(tab){
   const AM=A(),TM=T(),CM=C(),idx=busyIndex(S);
@@ -1696,12 +1696,44 @@ function reportHtml(tab){
     const rh=rc.length?`<h3 style="color:var(--navy)">Room clashes</h3><div class="tw"><table class="list"><tr><th>Room</th><th>Day</th><th>Period</th><th>Classes</th></tr>${rc.map(x=>`<tr><td>${esc(x.name)}</td><td>${DAY_NAMES[x.d]}</td><td>P${x.p+1}</td><td>${x.classes.map(c=>esc(CM[c].name)).join(', ')}</td></tr>`).join('')}</table></div>`:'<div class="note ok">✅ No room clash.</div>';
     if(!cl.length)return '<div class="note ok">✅ No teacher clash in the routine.</div>'+rh;
     return `<div class="tw"><table class="list"><tr><th>Teacher</th><th>Day</th><th>Shift</th><th>Period</th><th>Classes</th></tr>`+cl.map(x=>`<tr><td>${esc(x.teacher)}</td><td>${DAY_NAMES[x.d]}</td><td>${esc(S.shifts[x.shift].name)}</td><td>P${x.p+1}</td><td>${x.classes.map(c=>esc(CM[c].name)).join(', ')}</td></tr>`).join('')+'</table></div>'+rh;}
+  if(tab==='csum')return csumHtml();
   if(tab==='subj'){let h=`<div class="tw"><table class="list"><tr><th>Subject</th><th>Teachers (classes)</th><th>Periods/wk</th></tr>`;
     S.subjects.forEach(s=>{const al=S.alloc.filter(a=>a.subject===s.code);if(!al.length&&!S.alloc.some(a=>a.s2===s.code))return;const by={};al.forEach(a=>{(by[a.teacherId]=by[a.teacherId]||[]).push(CM[a.classId]?.name);});S.alloc.filter(a=>a.s2===s.code&&a.t2).forEach(a=>{(by[a.t2]=by[a.t2]||[]).push(CM[a.classId]?.name);});
       h+=`<tr><td><b>${esc(s.name)}</b></td><td>${Object.entries(by).map(([t,cs])=>`${esc((TM[t]||{}).abbr||'?')}: ${esc(cs.join(', '))}`).join('<br>')}</td><td>${al.reduce((x,a)=>x+(+a.ppw||0),0)}</td></tr>`;});return h+'</table></div>';}
   return '';
 }
 
+
+/* ---- class & section-wise subject summary ---- */
+let CSUM={sh:'all',view:'cards'};
+function csumBar(){return `<div class="row" style="margin-bottom:10px"><label>Shift <select onchange="CSUM.sh=this.value;renderReports()"><option value="all">All</option>${shifts().map(sh=>`<option value="${sh}" ${CSUM.sh===sh?'selected':''}>${esc(S.shifts[sh].name)}</option>`).join('')}</select></label>
+  <label>View <select onchange="CSUM.view=this.value;renderReports()"><option value="cards" ${CSUM.view==='cards'?'selected':''}>Class by class (with teachers)</option><option value="grid" ${CSUM.view==='grid'?'selected':''}>One table – all classes</option></select></label>
+  <button class="btn sec" onclick="csumCSV()">⬇️ Excel (CSV)</button></div>`;}
+function csumClasses(){return S.classes.filter(c=>CSUM.sh==='all'||c.shift===CSUM.sh);}
+function csumRows(cid){const TM=T();const out=[];
+  S.alloc.filter(a=>a.classId===cid).forEach(a=>{
+    out.push({sub:a.subject,name:subj(a.subject).name+(a.s2?' / '+subj(a.s2).name:''),p:+a.ppw||0,
+      t:a.fixed?'(whole school)':[a.teacherId,a.t2].filter(Boolean).map(t=>(TM[t]||{}).name||'?').join(' / ')||'—',
+      ab:a.fixed?'':[a.teacherId,a.t2].filter(Boolean).map(t=>(TM[t]||{}).abbr||'?').join('/'),fixed:!!a.fixed});});
+  return out;}
+function csumHtml(){const cls=csumClasses(),TM=T();if(!cls.length)return '<p class="muted">No classes.</p>';
+  if(CSUM.view==='grid'){const codes=[];cls.forEach(c=>csumRows(c.id).forEach(r=>{if(!codes.includes(r.sub))codes.push(r.sub);}));
+    const order=S.subjects.map(x=>x.code);codes.sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+    let h=`<div class="tw"><table class="list" style="font-size:12px"><tr><th>Class</th>${codes.map(c=>`<th title="${esc(subj(c).name)}">${esc(c)}</th>`).join('')}<th>Total</th><th>Slots</th></tr>`;
+    const colTot={};
+    cls.forEach(c=>{const rs=csumRows(c.id);const tot=rs.reduce((x,r)=>x+r.p,0),sl=S.days.length*nPer(S,c.shift);
+      h+=`<tr><td><b>${esc(c.name)}</b></td>${codes.map(code=>{const r=rs.filter(x=>x.sub===code);if(!r.length)return '<td></td>';const p=r.reduce((x,y)=>x+y.p,0);colTot[code]=(colTot[code]||0)+p;return `<td><b>${p}</b>${r[0].ab?`<br><span class="muted" style="font-size:10px">${esc(r.map(x=>x.ab).join(','))}</span>`:''}</td>`;}).join('')}<td><b>${tot}</b></td><td style="${tot!==sl?'color:var(--red);font-weight:700':''}">${sl}</td></tr>`;});
+    h+=`<tr style="background:#f1f5f9"><td><b>Total</b></td>${codes.map(c=>`<td><b>${colTot[c]||''}</b></td>`).join('')}<td></td><td></td></tr></table></div>`;
+    return h+`<p class="muted" style="font-size:11px">Number = periods per week · letters = teacher (abbreviation) · ${codes.map(c=>esc(c)+' '+esc(subj(c).name)).join(' · ')}</p>`;}
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px">';
+  cls.forEach(c=>{const rs=csumRows(c.id);const tot=rs.reduce((x,r)=>x+r.p,0),sl=S.days.length*nPer(S,c.shift);
+    h+=`<div class="card csum" style="margin:0;break-inside:avoid"><h3 style="margin:0 0 4px">${esc(c.name)} <span class="muted" style="font-size:12px;font-weight:400">· Class teacher: ${esc((TM[c.ct]||{}).name||'—')}</span></h3>
+    <table class="list" style="font-size:12.5px"><tr><th>Subject</th><th>Periods</th><th>Teacher</th></tr>${rs.map(r=>`<tr style="${r.fixed?'color:#64748b':''}"><td>${esc(r.name)}</td><td style="text-align:center"><b>${r.p}</b></td><td>${esc(r.t)}</td></tr>`).join('')}
+    <tr style="background:#f1f5f9"><td><b>Total</b></td><td style="text-align:center"><b>${tot}</b></td><td>${tot===sl?`<span class="pill g">Full week (${sl})</span>`:`<span class="pill ${tot>sl?'r':'a'}">${tot>sl?'Over':'Short'} – week has ${sl}</span>`}</td></tr></table></div>`;});
+  return h+'</div>';}
+function csumCSV(){const q=v=>'"'+String(v).replace(/"/g,'""')+'"';let out=['Class,Shift,Class teacher,Subject,Periods per week,Teacher'];const TM=T();
+  csumClasses().forEach(c=>{const rs=csumRows(c.id);rs.forEach(r=>out.push([c.name,S.shifts[c.shift].name,(TM[c.ct]||{}).name||'',r.name,r.p,r.t].map(q).join(',')));out.push([c.name,'','','TOTAL',rs.reduce((x,r)=>x+r.p,0),''].map(q).join(','));});
+  download('Class_Subject_Summary.csv','﻿'+out.join('\r\n'),'text/csv');}
 /* ---- print ---- */
 function pHead(t,sub){return `<div class="ph" style="display:flex;align-items:center;justify-content:center;gap:14px;text-align:center;margin-bottom:8px"><img src="${$('logoImg').src}" style="width:70px;height:70px"><div><h2 style="margin:0">${esc(S.school.name)}</h2><div>${esc(S.school.address)} · Session ${esc(S.school.session)} · ${seasonTag().replace(/^\S+ /,'')}</div><h3 style="margin:6px 0 2px">${t}</h3>${sub?`<div>${sub}</div>`:''}</div><div style="width:70px"></div></div>`;}
 const sig=()=>`<div class="sig"><span>Time Table In-charge</span><span>${esc(S.school.principal||'Principal')}</span></div>`;
@@ -1714,7 +1746,7 @@ function printTeacher(all){const ids=all?S.teachers.map(t=>t.id):[TV.mode==='tea
 function printMaster(){const d=+$('mDay').value,sh=$('mShift').value;doPrint(`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,$('mMode').value)}${sig()}</div>`);}
 function printAdjust(){if(!ADJ.absent.length){toast('Nothing to print');return;}const TM=T(),d=dayIdx(ADJ.date);
   doPrint(`<div class="pg">${pHead('PERIOD ADJUSTMENT – '+(d>=0?DAY_NAMES[d]:'')+', '+fmtDate(ADJ.date),'Absent: '+ADJ.absent.map(t=>esc(TM[t].name)).join(', '))}<table><tr><th>Shift</th><th>Period</th><th>Time</th><th>Class</th><th>Subject</th><th>Absent teacher</th><th>Substitute</th><th>Signature</th></tr>${adjRows().map(r=>`<tr><td>${esc(S.shifts[r.sh].name)}</td><td>P${r.p+1}</td><td>${ptime(r.sh,r.p)}</td><td>${esc(r.c.name)}</td><td>${esc(subj(tSub(r.a,r.tid)).name)}</td><td>${esc(TM[r.tid||r.a.teacherId].name)}</td><td><b>${esc((TM[ADJ.subs[r.key]]||{}).name||'')}</b></td><td style="width:90px"></td></tr>`).join('')}</table>${sig()}</div>`);}
-function printReport(){doPrint(`<div class="pg">${pHead('REPORT')}${reportHtml(repTab)}</div>`);}
+function printReport(){doPrint(`<div class="pg">${pHead(repTab==='csum'?'CLASS & SECTION-WISE SUBJECT SUMMARY':'REPORT',repTab==='csum'&&CSUM.sh!=='all'?esc(S.shifts[CSUM.sh].name):'')}${reportHtml(repTab)}</div>`);}
 
 /* ---- backup / export ---- */
 let DL=null;try{if(window.claude&&window.claude.use)window.claude.use('downloads').then(d=>{DL=d;}).catch(()=>{});}catch(e){}
