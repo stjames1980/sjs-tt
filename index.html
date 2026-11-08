@@ -756,7 +756,7 @@ function improveRuns(S,tt0,target,seed){
     const i1=Math.floor(R()*mv.length);let i2=Math.floor(R()*mv.length);if(i1===i2)continue;
     const [d1,p1]=mv[i1],[d2,p2]=mv[i2];const k1=SK(d1,p1),k2=SK(d2,p2);const c1=tt[cid][k1],c2=tt[cid][k2];if(!c1&&!c2)continue;
     const aff=new Set();[c1,c2].forEach(cc=>{if(cc)TIDS(A[cc.a]).forEach(t=>{aff.add(t+'|'+d1);aff.add(t+'|'+d2);});});
-    const cost=()=>{let s=0;aff.forEach(x=>{const [t,d]=x.split('|');s+=W*runPenalty(S,isB,t,sh,+d);});return s;};
+    const cost=()=>{let s=0;aff.forEach(x=>{const [t,d]=x.split('|');s+=W*runPenalty(S,isB,t,sh,+d);const tm=(T[t]&&+T[t].maxDay)||+S.settings.teacherMaxDay||99;s+=60*Math.max(0,(tDay[t+'|'+d]||0)-tm);});return s;};
     const pp=(cc,p)=>cc&&S.settings.spread!==false?Math.max(0,posPen(S,A[cc.a],p,np)):0;
     const before=cost()+pp(c1,p1)+pp(c2,p2);
     if(c1){mark(cid,d1,p1,c1.a,-1);delete tt[cid][k1];}if(c2){mark(cid,d2,p2,c2.a,-1);delete tt[cid][k2];}
