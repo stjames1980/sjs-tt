@@ -770,6 +770,29 @@ function improveRuns(S,tt0,target,seed){
     if(c1){tt[cid][k1]=c1;mark(cid,d1,p1,c1.a,1);}if(c2){tt[cid][k2]=c2;mark(cid,d2,p2,c2.a,1);}
   }
   return tt;}
+
+/* ---- balance teacher load: take 1 period from an over-loaded teacher's subject
+   and give it to a lighter teacher who ALREADY teaches that same class (+1 to their own subject).
+   Nobody gets a new class or section. ---- */
+function balRowOk(a){return a&&!a.fixed&&!a.t2&&!a.s2&&!a.grp&&a.teacherId;}
+function balanceOptions(S,tid,L){L=L||teacherLoad(S);const T=teacherMap(S),nd=S.days.length,maxSame=+S.settings.maxSame||2,out=[];
+  S.alloc.forEach(g=>{if(g.teacherId!==tid||!balRowOk(g)||(+g.ppw||0)<2)return;
+    S.alloc.forEach(r=>{if(r.classId!==g.classId||r===g||!balRowOk(r)||r.teacherId===tid)return;const rt=T[r.teacherId];if(!rt)return;
+      const lim=maxWeekOf(S,rt)||99,l=L[r.teacherId]||0;if(l+1>lim)return;
+      if((+r.ppw||0)+1>(+r.maxDay||maxSame)*nd)return;
+      const md=(+rt.maxDay||+S.settings.teacherMaxDay||99);if(l+1>md*nd)return;
+      out.push({g:g.id,r:r.id,cls:g.classId,gSub:g.subject,gP:+g.ppw,rSub:r.subject,rP:+r.ppw,rT:r.teacherId,rL:l});});});
+  out.sort((x,y)=>x.rL-y.rL||y.gP-x.gP);return out;}
+function applyBalance(S,gid,rid){const g=S.alloc.find(a=>a.id===gid),r=S.alloc.find(a=>a.id===rid);if(!g||!r||(+g.ppw||0)<2)return false;g.ppw=+g.ppw-1;r.ppw=+r.ppw+1;return true;}
+function autoBalance(S){const T=teacherMap(S),done=[],used={};
+  for(let guard=0;guard<500;guard++){const L=teacherLoad(S);
+    const over=S.teachers.filter(t=>{const m=maxWeekOf(S,t);return m&&(L[t.id]||0)>m;}).sort((a,b)=>(L[b.id]-maxWeekOf(S,b))-(L[a.id]-maxWeekOf(S,a)));
+    let moved=false;
+    for(const t of over){const op=balanceOptions(S,t.id,L).find(o=>!used[o.g]&&(used['r'+o.r]||0)<1);if(!op)continue;
+      applyBalance(S,op.g,op.r);used[op.g]=1;used['r'+op.r]=(used['r'+op.r]||0)+1;done.push(Object.assign({from:t.id},op));moved=true;break;}
+    if(!moved)break;}
+  const L=teacherLoad(S);const left=S.teachers.filter(t=>{const m=maxWeekOf(S,t);return m&&(L[t.id]||0)>m;}).map(t=>({t:t.id,l:L[t.id],m:maxWeekOf(S,t)}));
+  return {done,left};}
 /* ---- checks before generate ---- */
 function checkAll(S){const out=[],A=allocMap(S),C=classMap(S),T=teacherMap(S),L=teacherLoad(S);
   const add=(lvl,msg,where)=>out.push({lvl,msg,where:where||''});
@@ -1351,9 +1374,22 @@ function saveJoin(aid){const a=S.alloc.find(x=>x.id===aid);const sel=[...documen
   if(sel.length)a.grp=g;else delete a.grp;
   logAct(`Joined ${subj(a.subject).name}: ${[a.classId,...sel].map(x=>(C()[x]||{}).name).join(' + ')}`);save();closeModal();renderSetup();toast(sel.length?'🔗 Classes joined – run Auto Generate':'Join removed');}
 function addShortDay(){const v=$('sdNew').value;if(!v){toast('Choose a date');return;}S.season.shortDays=[...new Set([...(S.season.shortDays||[]),v])];logAct('Short day added: '+fmtDate(v));save();autoSeason();renderSetup();toast('⏱️ Short day added');}
+function balHtml(){const L=teacherLoad(S),TM=T(),CM=C(),lim=+S.settings.teacherMaxWeek||0;if(!lim)return '';
+  const over=S.teachers.filter(t=>{const m=maxWeekOf(S,t);return m&&(L[t.id]||0)>m;});
+  const light=S.teachers.filter(t=>(L[t.id]||0)>0&&(L[t.id]||0)<=lim-5).sort((a,b)=>L[a.id]-L[b.id]);
+  let h=`<div class="card" id="balCard"><h3>⚖️ Balance teacher load</h3><p class="muted">Takes 1 period from an over-loaded teacher's subject and gives it to a lighter teacher <b>who already teaches that class</b> (+1 to their own subject). No one gets a new class or section.</p>`;
+  if(light.length)h+=`<p>🟢 <b>Light load</b> (${lim-5} or less): ${light.map(t=>esc(t.name)+' <b>'+L[t.id]+'</b>').join(', ')}</p>`;
+  if(!over.length)return h+`<p class="note ok">✅ No teacher is above their weekly limit.</p></div>`;
+  h+=isAdmin?`<div class="row"><button class="btn gold" onclick="doAutoBalance()">⚖️ Auto balance all</button><span class="muted">or choose below, one period at a time. Undo (top right) takes it back.</span></div>`:'';
+  over.forEach(t=>{const ops=balanceOptions(S,t.id,L).slice(0,8);const m=maxWeekOf(S,t);
+    h+=`<details style="margin-top:6px"><summary><b>${esc(t.name)}</b> – ${L[t.id]} periods, limit ${m} → reduce <b>${L[t.id]-m}</b></summary>`+(ops.length?`<table class="list"><tr><th>Class</th><th>Take 1 from</th><th>Give 1 to</th><th></th></tr>${ops.map(o=>`<tr><td>${esc((CM[o.cls]||{}).name||'')}</td><td>${esc(subj(o.gSub).name)} ${o.gP}→${o.gP-1}</td><td>${esc((TM[o.rT]||{}).name||'')} <span class="pill ${o.rL<=lim-5?'g':''}">${o.rL}→${o.rL+1}</span> · ${esc(subj(o.rSub).name)} ${o.rP}→${o.rP+1}</td><td>${isAdmin?`<button class="btn sm" onclick="doBal('${o.g}','${o.r}')">Apply</button>`:''}</td></tr>`).join('')}</table>`:'<p class="muted">No lighter teacher teaches any of these classes. Change a teacher in Allocation instead.</p>')+`</details>`;});
+  return h+'</div>';}
+function doBal(g,r){if(!needAdmin())return;if(applyBalance(S,g,r)){logAct('Balanced load (1 period moved)');save();renderCheck();toast('⚖️ Done – click Noon/Morning shift only to remake the routine');}}
+function doAutoBalance(){if(!needAdmin())return;ask('Move periods automatically from over-loaded teachers to lighter teachers in the same classes?',()=>{saveVersion('Before auto balance');const r=autoBalance(S),AM=A(),TM=T(),CM=C();logAct(`Auto balance: ${r.done.length} period(s) moved`);save();renderCheck();
+  modal(`<h3>⚖️ ${r.done.length} period(s) moved</h3><div class="tw"><table class="list"><tr><th>Class</th><th>From</th><th>To</th></tr>${r.done.map(o=>`<tr><td>${esc((CM[o.cls]||{}).name)}</td><td>${esc(TM[o.from].name)} · ${esc(subj(o.gSub).name)} −1</td><td>${esc(TM[o.rT].name)} · ${esc(subj(o.rSub).name)} +1</td></tr>`).join('')}</table></div>${r.left.length?`<p class="note err">Still above the limit: ${r.left.map(x=>esc(TM[x.t].name)+' ('+x.l+')').join(', ')} – no lighter teacher teaches their classes.</p>`:'<p class="note ok">✅ Everyone is within the limit now.</p>'}<p>Now click <b>Noon shift only</b> / <b>Morning shift only</b> to remake the routine.</p><div class="row"><button class="btn" onclick="closeModal()">OK</button></div>`);});}
 function renderCheck(){const el=$('gCheck');if(!el)return;const L=checkAll(S),e=L.filter(x=>x.lvl==='err'),w=L.filter(x=>x.lvl==='warn');
-  const link=x=>x.where.startsWith('alloc:')?`<a href="#setup" onclick="setupTab='alloc';allocCls='${x.where.slice(6)}';go('setup');return false">Fix</a>`:x.where==='teachers'?`<a href="#setup" onclick="setupTab='teachers';go('setup');return false">Fix</a>`:x.where==='backup'?`<a href="#backup" onclick="go('backup');return false">Fix</a>`:'';
-  el.innerHTML=`<div class="card"><h3>${e.length?'⛔':'✅'} Check before generate</h3>${!L.length?'<p class="note ok">Everything looks right. You can generate.</p>':''}${e.length?`<p class="muted">Must fix (${e.length}):</p><ul>${e.map(x=>`<li style="color:#b91c1c">${esc(x.msg)} ${link(x)}</li>`).join('')}</ul>`:''}${w.length?`<details ${e.length?'':'open'}><summary class="muted">Warnings (${w.length}) – routine can still be made</summary><ul>${w.map(x=>`<li>${esc(x.msg)} ${link(x)}</li>`).join('')}</ul></details>`:''}</div>`;}
+  const link=x=>x.where.startsWith('alloc:')?`<a href="#setup" onclick="setupTab='alloc';allocCls='${x.where.slice(6)}';go('setup');return false">Fix</a>`:x.where==='teachers'?(x.msg.includes('periods/week')?`<a href="#balCard" onclick="$('balCard')&&$('balCard').scrollIntoView({behavior:'smooth'});return false">Fix</a>`:`<a href="#setup" onclick="setupTab='teachers';go('setup');return false">Fix</a>`):x.where==='backup'?`<a href="#backup" onclick="go('backup');return false">Fix</a>`:'';
+  el.innerHTML=`<div class="card"><h3>${e.length?'⛔':'✅'} Check before generate</h3>${!L.length?'<p class="note ok">Everything looks right. You can generate.</p>':''}${e.length?`<p class="muted">Must fix (${e.length}):</p><ul>${e.map(x=>`<li style="color:#b91c1c">${esc(x.msg)} ${link(x)}</li>`).join('')}</ul>`:''}${w.length?`<details ${e.length?'':'open'}><summary class="muted">Warnings (${w.length}) – routine can still be made</summary><ul>${w.map(x=>`<li>${esc(x.msg)} ${link(x)}</li>`).join('')}</ul></details>`:''}</div>`+balHtml();}
 function changeHtml(cr){if(!cr.total)return '<div class="note">🔁 No teacher\'s periods changed.</div>';
   return `<div class="card"><h3>🔁 What changed (${cr.teachers} teacher${cr.teachers>1?'s':''})</h3><div class="tw"><table class="list"><tr><th>Teacher</th><th>Removed</th><th>New</th></tr>${cr.rows.map(r=>`<tr><td>${esc(r.name)}</td><td style="color:#b91c1c;font-size:12px">${r.gone.slice(0,8).map(esc).join('<br>')}${r.gone.length>8?`<br>… +${r.gone.length-8}`:''}</td><td style="color:#15803d;font-size:12px">${r.added.slice(0,8).map(esc).join('<br>')}${r.added.length>8?`<br>… +${r.added.length-8}`:''}</td></tr>`).join('')}</table></div><p class="muted">Not happy? Click ↩️ Undo last generate, or restore an earlier version in Settings &amp; Backup.</p></div>`;}
 const LSV=LS+'_versions';
