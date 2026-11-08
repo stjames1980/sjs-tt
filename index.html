@@ -398,7 +398,11 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
    <div class="row"><button class="btn sm sec" onclick="printClassShift('M')">All morning classes</button><button class="btn sm sec" onclick="printClassShift('N')">All noon classes</button></div></div>
   <div class="card"><h3>👩‍🏫 Teacher-wise</h3><div class="row"><select id="pcT"></select><button class="btn sm" onclick="printOne('teacher',$('pcT').value)">Print one</button><button class="btn sm sec" onclick="printTeacher(true)">All teachers</button></div></div>
   <div class="card"><h3>🚪 Room-wise</h3><div class="row"><select id="pcR"></select><button class="btn sm" onclick="printOne('room',$('pcR').value)">Print one</button><button class="btn sm sec" onclick="printRoom(true)">All rooms</button></div></div>
-  <div class="card"><h3>🗓️ Master routine</h3><div class="row"><button class="btn sm" onclick="printMasterAll()">All days, both shifts</button></div></div>
+  <div class="card"><h3>🗓️ Master routine</h3><div class="row">
+   <label>Shift<select id="pcMS"></select></label>
+   <label>Day<select id="pcMD"></select></label>
+   <label>Names<select id="pcMN"><option value="short">Short (MAT · MA)</option><option value="full">Full names</option><option value="both">Full + short</option></select></label></div>
+   <div class="row"><button class="btn sm" onclick="printMasterSel()">🖨️ Print master routine</button><button class="btn sm sec" onclick="printMasterAll()">All days, both shifts</button></div></div>
   <div class="card"><h3>📈 Workload &amp; reports</h3><div class="row"><button class="btn sm" onclick="go('workload')">Workload</button><button class="btn sm sec" onclick="repTab='clash';go('reports')">Clash report</button></div></div>
   <div class="card"><h3>🔁 Adjustment &amp; export</h3><div class="row"><button class="btn sm" onclick="go('adjust')">Today's adjustment</button><button class="btn sm green" onclick="exportXls()">📗 Excel (all)</button><button class="btn sm sec" onclick="dlBackup()">💾 Backup</button></div></div>
  </div>
@@ -1273,6 +1277,9 @@ function roomGridOld(rid){const AM=A(),CM=C(),idx=roomIndex(S);let out='';
 function renderRooms(){fillSel($('rSel'),roomList(),$('rSel').value);const rid=$('rSel').value;$('rGrid').innerHTML=rid?roomGrid(rid):'<p class="muted">No rooms.</p>';}
 function printRoom(all){const ids=all?roomList().map(x=>x[0]):[TV.mode==='room'&&TV.id?TV.id:roomList()[0][0]];doPrint(ids.map(r=>`<div class="pg">${pHead('ROOM TIME TABLE – '+esc(roomName(S,r)))}${roomGrid(r)}${sig()}</div>`).join(''));}
 function printClassShift(sh){doPrint(S.classes.filter(c=>c.shift===sh).map(c=>`<div class="pg">${pHead('CLASS TIME TABLE – '+esc(c.name)+(clsRoom(c)?' · '+esc(clsRoom(c)):''),esc(S.shifts[c.shift].name)+' · Class Teacher: '+esc((T()[c.ct]||{}).name||'—'))}${classGrid(c.id,true)}${legend(c.id)}${sig()}</div>`).join(''));}
+function printMasterSel(){const sv=$('pcMS').value,dv=$('pcMD').value,keep=MNAME;MNAME=$('pcMN').value;
+  const shs=sv==='all'?shifts():[sv],ds=dv==='all'?S.days:[+dv];
+  const html=ds.map(d=>shs.map(sh=>`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,'c')}${sig()}</div>`).join('')).join('');MNAME=keep;doPrint(html);}
 function printMasterAll(){doPrint(S.days.map(d=>shifts().map(sh=>`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,'c')}${sig()}</div>`).join('')).join(''));}
 
 /* ---- workload ---- */
@@ -1969,7 +1976,9 @@ let deferredInstall=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installBtn').style.display='inline-block';});
 async function installApp(){if(!deferredInstall)return;deferredInstall.prompt();try{await deferredInstall.userChoice;}catch(e){}deferredInstall=null;$('installBtn').style.display='none';}
 try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)&&!/claude|usercontent/.test(location.hostname))navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
-function fillPC(){fillSel($('pcC'),S.classes.map(c=>[c.id,c.name]),$('pcC').value);fillSel($('pcT'),S.teachers.map(t=>[t.id,t.name]),$('pcT').value);fillSel($('pcR'),roomList(),$('pcR').value);}
+function fillPC(){const ms=$('pcMS');if(ms){const v=ms.value;ms.innerHTML=shifts().map(sh=>`<option value="${sh}">${esc(S.shifts[sh].name)}</option>`).join('')+(shifts().length>1?'<option value="all">Morning + Noon (both)</option>':'');if(v)ms.value=v;else ms.value=shifts().includes('N')?'N':shifts()[0];
+  const md=$('pcMD'),dv=md.value;md.innerHTML='<option value="all">All days</option>'+S.days.map(d=>`<option value="${d}">${DAY_NAMES[d]}</option>`).join('');md.value=dv||'all';$('pcMN').value=MNAME;}
+  fillSel($('pcC'),S.classes.map(c=>[c.id,c.name+(clsRoom(c)?' ('+clsRoom(c)+')':'')]),$('pcC').value);fillSel($('pcT'),S.teachers.map(t=>[t.id,t.name]),$('pcT').value);fillSel($('pcR'),roomList(),$('pcR').value);}
 load();autoSeason();LASTJ=JSON.stringify(S);applyTheme();refreshHeader();go(location.hash.slice(1)||'home');
 </script>
 </body>
