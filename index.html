@@ -72,6 +72,8 @@ td.brk{background:repeating-linear-gradient(45deg,#fff7e0,#fff7e0 6px,#fdf0c8 6p
 .cell{min-width:78px;cursor:default;border-radius:7px;padding:5px 4px;line-height:1.2}
 .cell .s{font-weight:700;font-size:13px}
 .cell .t{font-size:11px;color:#333;opacity:.85}
+.cell .ab{font-weight:500;opacity:.75;font-size:.85em}
+#mGrid .cell{min-width:96px}
 .cell.empty{color:#b8bfcc}
 .cell.clash{outline:2px solid var(--red);background:#ffe9e9!important}
 .adm .cell{cursor:pointer}
@@ -143,7 +145,7 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
 #printArea{display:none}
 body.measuring #printArea{font-family:"Segoe UI",Roboto,Arial,sans-serif;color:#0f172a}
 body.measuring #printArea *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-body.measuring #printArea .pg{width:287mm;height:200mm;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;break-inside:avoid;page-break-inside:avoid;page-break-after:always;break-after:page;background:#fff}
+body.measuring #printArea .pg{width:287mm;height:199mm;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;break-inside:avoid;page-break-inside:avoid;page-break-after:always;break-after:page;background:#fff}
 body.measuring #printArea .pg:last-child{page-break-after:auto;break-after:auto}
 body.measuring #printArea .ph2{display:flex;align-items:stretch;border-radius:10px;overflow:hidden;margin-bottom:6px;flex:0 0 auto;box-shadow:0 0 0 1px #cbd5e1}
 body.measuring #printArea .ph2 .phL{display:flex;align-items:center;gap:12px;padding:8px 16px;background:linear-gradient(120deg,var(--navy),var(--navy2));color:#fff;flex:1}
@@ -184,6 +186,12 @@ body.measuring #printArea table:not(.ttg):not(.list) td.brk,#printArea th.brkh{w
 body.measuring #printArea .cell{height:100%;box-sizing:border-box;border-radius:5px;padding:2px 3px;display:flex;flex-direction:column;justify-content:center;text-align:center;min-width:0}
 body.measuring #printArea .cell .s{font-size:13.5px;font-weight:800}
 body.measuring #printArea .cell .t{font-size:11px;font-weight:600}
+body.measuring #printArea .cell .fn{font-size:12px;line-height:1.1;display:block}
+body.measuring #printArea .cell .s,body.measuring #printArea .cell .t{white-space:normal!important;overflow-wrap:anywhere;word-break:normal}
+ #printArea .cell .s,#printArea .cell .t{white-space:normal!important;overflow-wrap:anywhere;word-break:normal}
+body.measuring #printArea .cell .ab{font-weight:600;opacity:.7}
+ #printArea .cell .fn{font-size:12px;line-height:1.1;display:block}
+ #printArea .cell .ab{font-weight:600;opacity:.7}
 body.measuring #printArea table.list{width:100%;border-collapse:collapse;font-size:12.5px}
 body.measuring #printArea table.list th{background:var(--navy)!important;color:#fff!important;border:1px solid var(--navy)!important;padding:5px}
 body.measuring #printArea table.list td{border:1px solid #cbd5e1!important;padding:4px 6px}
@@ -219,7 +227,7 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
 
  #printArea{font-family:"Segoe UI",Roboto,Arial,sans-serif;color:#0f172a}
  #printArea *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
- #printArea .pg{width:287mm;height:200mm;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;break-inside:avoid;page-break-inside:avoid;page-break-after:always;break-after:page;background:#fff}
+ #printArea .pg{width:287mm;height:199mm;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;position:relative;break-inside:avoid;page-break-inside:avoid;page-break-after:always;break-after:page;background:#fff}
  #printArea .pg:last-child{page-break-after:auto;break-after:auto}
  #printArea .ph2{display:flex;align-items:stretch;border-radius:10px;overflow:hidden;margin-bottom:6px;flex:0 0 auto;box-shadow:0 0 0 1px #cbd5e1}
  #printArea .ph2 .phL{display:flex;align-items:center;gap:12px;padding:8px 16px;background:linear-gradient(120deg,var(--navy),var(--navy2));color:#fff;flex:1}
@@ -260,6 +268,8 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
  #printArea .cell{height:100%;box-sizing:border-box;border-radius:5px;padding:2px 3px;display:flex;flex-direction:column;justify-content:center;text-align:center;min-width:0}
  #printArea .cell .s{font-size:13.5px;font-weight:800}
  #printArea .cell .t{font-size:11px;font-weight:600}
+ #printArea .cell .fn{font-size:12px;line-height:1.1;display:block}
+ #printArea .cell .ab{font-weight:600;opacity:.7}
  #printArea table.list{width:100%;border-collapse:collapse;font-size:12.5px}
  #printArea table.list th{background:var(--navy)!important;color:#fff!important;border:1px solid var(--navy)!important;padding:5px}
  #printArea table.list td{border:1px solid #cbd5e1!important;padding:4px 6px}
@@ -365,6 +375,7 @@ body.measuring #printArea .sig .sm{font-size:10px;color:#64748b;align-self:cente
   <label>Day<select id="mDay" onchange="renderMaster()"></select></label>
   <label>Shift<select id="mShift" onchange="renderMaster()"></select></label>
   <label>Show<select id="mMode" onchange="renderMaster()"><option value="c">Classes</option><option value="t">Teachers</option></select></label>
+  <label>Names<select id="mName" onchange="MNAME=this.value;renderMaster()"><option value="short">Short (MAT · MA)</option><option value="full">Full names</option><option value="both">Full + short</option></select></label>
   <button class="btn" onclick="printMaster()">🖨️ Print</button>
  </div>
  <div class="tw" id="mGrid"></div>
@@ -1070,11 +1081,16 @@ function setAdm(){setTimeout(updUndo,0);$('adminBtn').classList.toggle('on',isAd
 /* ---- grids ---- */
 function headRow(sh,first){const s=S.shifts[sh];let h=`<tr><th class="day">${first||'Day'}</th>`;
   s.periods.forEach((p,i)=>{h+=`<th>P${i+1}<span class="tm">${trange(p[0],p[1])}</span></th>`;if(brkOf(sh,i))h+=`<th class="brkh" style="width:22px"></th>`;});return h+'</tr>';}
+let MNAME='short';
 function cellHtml(a,teacherSide,extra,clash){
   if(!a)return `<div class="cell empty">—</div>`;
   const s=subj(a.subject),t=T()[a.teacherId],tside=typeof teacherSide==='string'?teacherSide:'';
-  const top=teacherSide?esc(C()[a.classId]?.name||''):esc(aCode(a));
-  const bot=teacherSide?esc(tside?tSub(a,tside):aCode(a)):esc(t?aTNames(a,'abbr'):(a.fixed?'⭐':'?'));
+  const nm=MNAME||'short';let top,bot;
+  if(teacherSide){const sc=tside?tSub(a,tside):a.subject;top=esc(C()[a.classId]?.name||'');
+    bot=nm==='short'?esc(tside?sc:aCode(a)):nm==='full'?esc(subj(sc).name):esc(subj(sc).name)+' <span class="ab">('+esc(sc)+')</span>';}
+  else{top=nm==='short'?esc(aCode(a)):nm==='full'?esc(aName(a)):esc(aName(a))+' <span class="ab">('+esc(aCode(a))+')</span>';
+    bot=a.fixed&&!t?(nm==='short'?'⭐':'⭐ Whole school'):!t?'?':nm==='short'?esc(aTNames(a,'abbr')):nm==='full'?esc(aTNames(a)):esc(aTNames(a))+' <span class="ab">('+esc(aTNames(a,'abbr'))+')</span>';}
+  if(nm!=='short')top=`<span class="fn">${top}</span>`;
   return `<div class="cell${clash?' clash':''}" style="background:${tint(s.color,.16)};border-left:4px solid ${s.color}" title="${esc(aName(a))} – ${esc(t?aTNames(a):'')}"><div class="s">${top}${extra||''}</div><div class="t">${bot}</div></div>`;
 }
 function classGridOld(cid,forPrint){
@@ -1232,7 +1248,9 @@ function masterHtml(d,sh,mode){
       h+=`<td data-cid="${c.id}" data-d="${d}" data-p="${i}" onclick="editCell('${c.id}',${d},${i})">${cellHtml(a,false,cell&&cell.l?' <span class="lock">🔒</span>':'',cl)}</td>`;if(brkOf(sh,i))h+='<td class="brk"></td>';});h+='</tr>';});
   return h+'</table>';
 }
-function renderMaster(){daySel($('mDay'));shiftSel($('mShift'));$('mGrid').innerHTML=masterHtml(+$('mDay').value,$('mShift').value,$('mMode').value);}
+function renderMaster(){daySel($('mDay'));const ms=$('mShift'),keep=ms.value;shiftSel(ms);if(shifts().length>1){ms.insertAdjacentHTML('beforeend','<option value="all">Morning + Noon (both)</option>');if(keep==='all')ms.value='all';}
+  if($('mName'))$('mName').value=MNAME;const d=+$('mDay').value,mode=$('mMode').value;
+  $('mGrid').innerHTML=ms.value==='all'?shifts().map(sh=>`<h3 style="margin:10px 0 6px;color:var(--navy)">${esc(S.shifts[sh].name)}</h3>`+masterHtml(d,sh,mode)).join(''):masterHtml(d,ms.value,mode);}
 
 /* ---- free ---- */
 function renderFree(){daySel($('fDay'));shiftSel($('fShift'));const d=+$('fDay').value,sh=$('fShift').value,s=S.shifts[sh];
@@ -1902,16 +1920,16 @@ function doSecFixAll(){if(!needAdmin())return;ask('Make all sections equal now? 
 function pHead(t,sub){const parts=String(t).split(' – ');const kind=parts.length>1?parts[0]:'';const nm=parts.length>1?parts.slice(1).join(' – '):parts[0];
   return `<div class="ph2"><div class="phL"><img src="${$('logoImg').src}"><div><div class="sn">${esc(S.school.name)}</div><div class="sa">${esc(S.school.address)} · Session ${esc(S.school.session)} · ${seasonTag().replace(/^\S+ /,'')}</div></div></div><div class="phR">${kind?`<div class="pk">${kind}</div>`:''}<div class="pn">${nm}</div>${sub?`<div class="ps">${sub}</div>`:''}</div></div>`;}
 const sig=()=>`<div class="sig"><span class="sl">Time Table In-charge</span><span class="sm">Printed ${new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</span><span class="sl">${esc(S.school.principal||'Principal')}<br><span style="font-weight:500;font-size:10px">Principal</span></span></div>`;
-function fitPages(){/* fit every sheet to one A4 landscape page: stretch rows to fill the page, or shrink if too big */
+function fitPages(){/* fit every sheet to one A4 landscape page: shrink if too big, then stretch rows to fill the page */
   const pa=$('printArea');document.body.classList.add('measuring');pa.style.cssText='display:block;position:absolute;left:-9999px;top:0';
   pa.querySelectorAll('.pg').forEach(pg=>{const tabs=[...pg.querySelectorAll(':scope>.tw>table,:scope>table')];
-    pg.style.zoom='';pg.style.height='auto';tabs.forEach(t=>{t.style.height='auto';[...t.rows].forEach(r=>r.style.height='');});
-    const W=pg.getBoundingClientRect().width,H=W*200/287;const h=pg.scrollHeight,w=pg.scrollWidth;
-    if(h>H||w>W+2){const zz=Math.max(0.2,Math.min(H/h,W/w)*0.97);pg.style.zoom=zz.toFixed(3);pg.style.height=(200/zz).toFixed(1)+'mm';pg.style.width=(287/zz).toFixed(1)+'mm';return;}
-    // stretch: share the spare height among the lesson rows (not header / break rows)
-    let spare=H-h-4;const grow=[];tabs.forEach(t=>[...t.rows].forEach((r,i)=>{if(i===0||r.classList.contains('brow')||r.querySelector('.brk:only-child'))return;grow.push(r);}));
-    pg.style.height='';
-    if(spare>0&&grow.length){const add=spare/grow.length;grow.forEach(r=>{r.style.height=(r.getBoundingClientRect().height+add).toFixed(1)+'px';});}});
+    pg.style.zoom='';pg.style.height='auto';pg.style.width='';tabs.forEach(t=>[...t.rows].forEach(r=>r.style.height=''));
+    const W=pg.getBoundingClientRect().width,H=W*199/287;const h=pg.scrollHeight,w=pg.scrollWidth;
+    const grow=[];tabs.forEach(t=>[...t.rows].forEach((r,i)=>{if(i===0||r.classList.contains('brow'))return;grow.push([r,r.getBoundingClientRect().height]);}));
+    let zz=1;if(h>H||w>W+2)zz=Math.max(0.2,Math.min(H/h,W/w)*0.97);
+    const spare=(H*0.985)/zz-h-4;
+    if(spare>0&&grow.length){const add=spare/grow.length;grow.forEach(([r,rh])=>r.style.height=(rh+add).toFixed(1)+'px');}
+    if(zz<1){pg.style.zoom=zz.toFixed(3);pg.style.height=(198/zz).toFixed(1)+'mm';pg.style.width=(287/zz).toFixed(1)+'mm';}else pg.style.height='';});
   pa.style.cssText='';document.body.classList.remove('measuring');}
 function doPrint(html){$('printArea').innerHTML=html;try{fitPages();}catch(e){}try{window.print();}catch(e){}setTimeout(()=>toast('If the print window did not open, open this app file directly in Chrome and print from there.'),900);}
 function printClass(all){const ids=all?S.classes.map(c=>c.id):[TV.mode==='class'&&TV.id?TV.id:S.classes[0].id];
@@ -1919,7 +1937,7 @@ function printClass(all){const ids=all?S.classes.map(c=>c.id):[TV.mode==='class'
 function legend(cid){const al=S.alloc.filter(a=>a.classId===cid&&!a.fixed);return `<div class="pleg">${al.map(a=>`<div><b>${esc(aName(a))}</b> (${+a.ppw||0}) – ${esc(aTNames(a))}</div>`).join('')}</div>`;}
 function printTeacher(all){const ids=all?S.teachers.map(t=>t.id):[TV.mode==='teacher'&&TV.id?TV.id:S.teachers[0].id];
   doPrint(ids.map(id=>{const t=T()[id];return `<div class="pg">${pHead('TEACHER TIME TABLE – '+esc(t.name)+' ('+esc(t.abbr)+')','Periods/week: '+(teacherPlaced(S)[id]||0))}${teacherGrid(id,true)}${sig()}</div>`;}).join(''));}
-function printMaster(){const d=+$('mDay').value,sh=$('mShift').value;doPrint(`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,$('mMode').value)}${sig()}</div>`);}
+function printMaster(){const d=+$('mDay').value,v=$('mShift').value,shs=v==='all'?shifts():[v];doPrint(shs.map(sh=>`<div class="pg">${pHead('MASTER ROUTINE – '+DAY_NAMES[d].toUpperCase(),esc(S.shifts[sh].name))}${masterHtml(d,sh,$('mMode').value)}${sig()}</div>`).join(''));}
 function printAdjust(){if(!ADJ.absent.length){toast('Nothing to print');return;}const TM=T(),d=dayIdx(ADJ.date);
   doPrint(`<div class="pg">${pHead('PERIOD ADJUSTMENT – '+(d>=0?DAY_NAMES[d]:'')+', '+fmtDate(ADJ.date),'Absent: '+ADJ.absent.map(t=>esc(TM[t].name)).join(', '))}<table><tr><th>Shift</th><th>Period</th><th>Time</th><th>Class</th><th>Subject</th><th>Absent teacher</th><th>Substitute</th><th>Signature</th></tr>${adjRows().map(r=>`<tr><td>${esc(S.shifts[r.sh].name)}</td><td>P${r.p+1}</td><td>${ptime(r.sh,r.p)}</td><td>${esc(r.c.name)}</td><td>${esc(subj(tSub(r.a,r.tid)).name)}</td><td>${esc(TM[r.tid||r.a.teacherId].name)}</td><td><b>${esc((TM[ADJ.subs[r.key]]||{}).name||'')}</b></td><td style="width:90px"></td></tr>`).join('')}</table>${sig()}</div>`);}
 function printReport(){doPrint(`<div class="pg">${pHead(repTab==='csum'?'CLASS & SECTION-WISE SUBJECT SUMMARY':repTab==='sbal'?'CLASS & SECTION BALANCE CHECK':'REPORT',(repTab==='csum'||repTab==='sbal')&&CSUM.sh!=='all'?esc(S.shifts[CSUM.sh].name):'')}${reportHtml(repTab)}</div>`);}
