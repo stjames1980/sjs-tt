@@ -16,6 +16,8 @@
    (After changing, commit on GitHub and reload the app with Ctrl+F5.) */
 :root{
  --pClassW:86px;        /* width of the first "Class" column        */
+ --pClassLeft:12px;     /* space before the class name (bigger = more to the right) */
+ --pClassAlign:left;    /* left, center or right                     */
  --pClassFont:17px;     /* class name, e.g. VI-A                    */
  --pRoomFont:11px;      /* room under the class, e.g. Room 18       */
  --pSubjFont:15px;      /* subject in SHORT mode (MAT)              */
@@ -212,7 +214,7 @@ body.measuring #printArea .pleg{flex:0 0 auto;font-size:10.5px;line-height:1.35;
 body.measuring #printArea .pleg b{color:var(--navy)}
 body.measuring #printArea table:not(.ttg):not(.list){border-spacing:1.5px}
 body.measuring #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW)}
-body.measuring #printArea table:not(.ttg):not(.list) td.day{padding:1px 5px!important;font-size:var(--pClassFont);line-height:1.05;white-space:normal}
+body.measuring #printArea table:not(.ttg):not(.list) td.day{padding:1px 4px 1px var(--pClassLeft)!important;text-align:var(--pClassAlign);font-size:var(--pClassFont);line-height:1.05;white-space:normal}
 body.measuring #printArea table:not(.ttg):not(.list) td.day span{font-size:var(--pRoomFont)!important;font-weight:600;white-space:nowrap}
 body.measuring #printArea table:not(.ttg):not(.list) th{padding:3px 1px}
 body.measuring #printArea .cell{padding:1px 3px!important;line-height:1.08}
@@ -226,7 +228,7 @@ body.measuring #printArea .cell>div:empty,body.measuring #printArea .cell .lock{
  #printArea .lock{display:none!important}
  #printArea table:not(.ttg):not(.list){border-spacing:1.5px}
  #printArea table:not(.ttg):not(.list) tr:first-child th:first-child{width:var(--pClassW)}
- #printArea table:not(.ttg):not(.list) td.day{padding:1px 5px!important;font-size:var(--pClassFont);line-height:1.05;white-space:normal}
+ #printArea table:not(.ttg):not(.list) td.day{padding:1px 4px 1px var(--pClassLeft)!important;text-align:var(--pClassAlign);font-size:var(--pClassFont);line-height:1.05;white-space:normal}
  #printArea table:not(.ttg):not(.list) td.day span{font-size:var(--pRoomFont)!important;font-weight:600;white-space:nowrap}
  #printArea table:not(.ttg):not(.list) th{padding:3px 1px}
  #printArea .cell{padding:1px 3px!important;line-height:1.08}
