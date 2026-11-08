@@ -141,6 +141,19 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
 #ghost{position:fixed;z-index:70;pointer-events:none;width:84px;opacity:.92;transform:rotate(-3deg);box-shadow:0 8px 20px #0004;border-radius:8px;background:#fff}
 .ds{display:none}
 #printArea{display:none}
+body.measuring #printArea .pg{break-inside:avoid;page-break-inside:avoid}
+body.measuring #printArea .pg .ph{display:flex!important;break-after:avoid}
+body.measuring #printArea .pg .ph img{width:56px!important;height:56px!important}
+body.measuring #printArea .pg .tw{overflow:visible!important}
+body.measuring #printArea .pg .ttg{width:100%;font-size:11px}
+body.measuring #printArea .pg .ttg th{padding:3px!important;font-size:11px}
+body.measuring #printArea .pg .ttg td.tper{font-size:10px;padding:2px 4px!important;white-space:nowrap}
+body.measuring #printArea .pg .ttg td.tper span{font-size:9px}
+body.measuring #printArea .pg .tc{min-height:34px!important;padding:2px 5px!important;font-size:11px}
+body.measuring #printArea .pg .tc .tl{font-size:9px!important}
+body.measuring #printArea .pg .sig{margin-top:22px!important}
+body.measuring #printArea th,body.measuring #printArea td{padding:4px}
+body.measuring #printArea .ttg{border-spacing:3px}
 .ug{display:grid;gap:3px}
 .ug button{border:1px solid var(--line);background:#fff;border-radius:5px;padding:6px 0;font-size:11px;cursor:pointer}
 .ug button.on{background:var(--red);color:#fff}
@@ -162,7 +175,19 @@ td.dok{background:#dff4e7}td.dbad{background:#fdeaea}td.dok .cell{box-shadow:0 0
 @media print{
  @page{size:A4 landscape;margin:9mm}
  body{background:#fff}
- header,nav,main,#bnav,#modal,#toast{display:none!important}
+ header,nav,main,.wrap,#bnav,#modal,#toast{display:none!important}
+ html,body{height:auto!important;min-height:0!important}
+ .pg{break-inside:avoid;page-break-inside:avoid}
+ .pg .ph{display:flex!important;break-after:avoid}
+ .pg .ph img{width:56px!important;height:56px!important}
+ .pg .tw{overflow:visible!important}
+ .pg .ttg{width:100%;font-size:11px}
+ .pg .ttg th{padding:3px!important;font-size:11px}
+ .pg .ttg td.tper{font-size:10px;padding:2px 4px!important;white-space:nowrap}
+ .pg .ttg td.tper span{font-size:9px}
+ .pg .tc{min-height:34px!important;padding:2px 5px!important;font-size:11px}
+ .pg .tc .tl{font-size:9px!important}
+ .pg .sig{margin-top:22px!important}
  #printArea{display:block!important}
  .pg{page-break-after:always}
  .pg:last-child{page-break-after:auto}
@@ -1807,7 +1832,11 @@ function doSecFixAll(){if(!needAdmin())return;ask('Make all sections equal now? 
 /* ---- print ---- */
 function pHead(t,sub){return `<div class="ph" style="display:flex;align-items:center;justify-content:center;gap:14px;text-align:center;margin-bottom:8px"><img src="${$('logoImg').src}" style="width:70px;height:70px"><div><h2 style="margin:0">${esc(S.school.name)}</h2><div>${esc(S.school.address)} · Session ${esc(S.school.session)} · ${seasonTag().replace(/^\S+ /,'')}</div><h3 style="margin:6px 0 2px">${t}</h3>${sub?`<div>${sub}</div>`:''}</div><div style="width:70px"></div></div>`;}
 const sig=()=>`<div class="sig"><span>Time Table In-charge</span><span>${esc(S.school.principal||'Principal')}</span></div>`;
-function doPrint(html){$('printArea').innerHTML=html;try{window.print();}catch(e){}setTimeout(()=>toast('If the print window did not open, open this app file directly in Chrome and print from there.'),900);}
+function fitPages(){/* shrink any sheet that is taller/wider than one A4 landscape page */
+  const pa=$('printArea'),W=1030,H=660;document.body.classList.add('measuring');pa.style.cssText='display:block;position:absolute;left:-9999px;top:0;width:'+W+'px';
+  pa.querySelectorAll('.pg').forEach(pg=>{pg.style.zoom='';const h=pg.scrollHeight,w=pg.scrollWidth;const z=Math.min(1,H/h,W/w);if(z<1)pg.style.zoom=Math.max(0.2,z*0.98).toFixed(3);});
+  pa.style.cssText='';document.body.classList.remove('measuring');}
+function doPrint(html){$('printArea').innerHTML=html;try{fitPages();}catch(e){}try{window.print();}catch(e){}setTimeout(()=>toast('If the print window did not open, open this app file directly in Chrome and print from there.'),900);}
 function printClass(all){const ids=all?S.classes.map(c=>c.id):[TV.mode==='class'&&TV.id?TV.id:S.classes[0].id];
   doPrint(ids.map(id=>{const c=C()[id];return `<div class="pg">${pHead('CLASS TIME TABLE – '+esc(c.name),esc(S.shifts[c.shift].name)+' · Class Teacher: '+esc((T()[c.ct]||{}).name||'—'))}${classGrid(id,true)}${legend(id)}${sig()}</div>`;}).join(''));}
 function legend(cid){const al=S.alloc.filter(a=>a.classId===cid);return `<p style="font-size:11px;margin-top:8px">${al.map(a=>`<b>${esc(aCode(a))}</b> ${esc(aName(a))} – ${esc(aTNames(a))}`).join(' · ')}</p>`;}
